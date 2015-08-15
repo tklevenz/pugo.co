@@ -1,4 +1,7 @@
-appengine-skeleton
+pugo.co - google docs to epub converter
 =============================
 
-This is a generated application from the appengine-skeleton archetype.
+Servlet backend for pugo.co, currently running on https://pugo-co-1037.appspot.com/ 
+
+Usage:
+https://pugo-co-1037.appspot.com/convert/source= (html exportLink from google docs) will convert the google doc to epub 3.0 (not yet 100% valid epub)
