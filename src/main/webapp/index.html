@@ -4,16 +4,19 @@
 <head>
 <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1.0, user-scalable=yes">
-    <link href='http://fonts.googleapis.com/css?family=Source+Code+Pro:400,700' rel='stylesheet' type='text/css'>
+    <link href='http://fonts.googleapis.com/css?family=Source+Code+Pro:400,700|Roboto' rel='stylesheet' type='text/css'>
     <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/github-fork-ribbon-css/0.1.1/gh-fork-ribbon.min.css" />
 <style type="text/css">
     html,
     body {
-        font-family: 'Source Code Pro', Monospace;
+        font-family: 'Roboto', sans-serif;
         color: #38a2d1;
         width: 100%;
         height: 100%;
         margin: 0;
+    }
+    h1 {
+    	font-family: 'Source Code Pro', Monospace;
     }
     
     .flex-container {
@@ -28,6 +31,10 @@
         justify-content: center;
         height: 100%;
         font-size: 32px;
+        flex-direction: column;
+    }
+    .flex-item {
+    	margin: 0;
     }
     .github-fork-ribbon {
 	    background-color: #333;
@@ -38,7 +45,8 @@
 
 <body>
 	<div class="flex-container">
-		<h1>pugo.co</h1>	
+		<h1 class="flex-item">pugo.co</h1>	
+		<p class="flex-item">publish on the go</p>
 	</div>
 
 	<div class="github-fork-ribbon-wrapper right-bottom">
