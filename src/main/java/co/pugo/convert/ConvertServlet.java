@@ -38,11 +38,13 @@ public class ConvertServlet extends HttpServlet {
 			throws ServletException, IOException {
 
 		String source = request.getParameter("source");
+		String token = request.getParameter("token");
+		String fname = request.getParameter("fname");
 
-		convert(source, response);
+		convert(source, token, fname, response);
 	}
 
-	private void convert(String source, HttpServletResponse response) 
+	private void convert(String source, String token, String fname, HttpServletResponse response) 
 			throws IOException {
 
 		ServletOutputStream out = response.getOutputStream();
@@ -58,8 +60,14 @@ public class ConvertServlet extends HttpServlet {
 		//out.println("Downloading " + sourceUrl);
 		URL url = new URL(sourceUrl);
 		URLConnection urlConnection = url.openConnection();
-		urlConnection.setConnectTimeout(1000);
-		urlConnection.setReadTimeout(1000);
+
+		// set OAuth request token
+		if (token != null) {
+			urlConnection.setRequestProperty("Authorization", "Bearer " + token);
+		}
+		
+		//urlConnection.setConnectTimeout(1000);
+		//urlConnection.setReadTimeout(1000);
 		InputStream is = urlConnection.getInputStream();
 
 
@@ -87,11 +95,9 @@ public class ConvertServlet extends HttpServlet {
 		baos.close();
 		zos.finish();
 		zos.close();
-		
-		File file = new File(sourceUrl);
-		String fileName = file.getName().replaceAll("(htm|html)$", "epub");
+			
 		response.setContentType("application/zip");
-		response.setHeader("Content-Disposition", "attachment; filename='" + fileName + "'");
+		response.setHeader("Content-Disposition", "attachment; filename='" + fname + ".epub'");
 
 		out.println("Finished processing...");
 		out.write(baos.toByteArray());

@@ -1,0 +1,37 @@
+<html>
+	<head>
+		<title>test</title>
+		<script type="text/javascript">
+			function getInput() {
+				var url = document.getElementById('url').value;
+				var token = document.getElementById('token').value;
+
+				var theUrl = "http://localhost:8080/convert?source=" + encodeURI(url) + "&token=" + token;
+
+				console.log(theUrl);
+				var xmlHttp = new XMLHttpRequest();
+				xmlHttp.responseType = 'blob';
+
+				xmlHttp.open( "GET", theUrl, false ); // false for synchronous request
+    			xmlHttp.send( null );
+    			return xmlHttp.responseText;
+			}
+		</script>
+	</head>
+	<body>
+		<form action="http://localhost:8080/convert" method="post">
+			<span>Url:</span>
+			<br>
+			<input type="text" name="source" id="url">
+			<br><br>
+			<span>Token:</span>
+			<br>
+			<input type="text" name="token" id="token">
+			<br><br>
+			<input type="submit" name="Submit">
+		</form>
+		<div id="output">
+			
+		</div>
+	</body>
+</html>

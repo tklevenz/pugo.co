@@ -2,11 +2,16 @@
 <html>
 
 <head>
-<meta charset="UTF-8">
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, minimum-scale=1.0, initial-scale=1.0, user-scalable=yes">
     <link href='http://fonts.googleapis.com/css?family=Source+Code+Pro:400,700|Roboto' rel='stylesheet' type='text/css'>
     <link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/github-fork-ribbon-css/0.1.1/gh-fork-ribbon.min.css" />
-<style type="text/css">
+    <script src="script.js"></script>
+    <!-- material design lite -->
+    <link rel="stylesheet" href="https://storage.googleapis.com/code.getmdl.io/1.0.5/material.deep_orange-light_blue.min.css">
+    <script src="https://storage.googleapis.com/code.getmdl.io/1.0.5/material.min.js"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <style type="text/css">
     html,
     body {
         font-family: 'Roboto', sans-serif;
@@ -15,8 +20,15 @@
         height: 100%;
         margin: 0;
     }
+    
     h1 {
-    	font-family: 'Source Code Pro', Monospace;
+        font-family: 'Source Code Pro', Monospace;
+        font-size: 64px;
+        font-weight: bold;
+    }
+    
+    p {
+        font-size: 32px;
     }
     
     .flex-container {
@@ -33,26 +45,54 @@
         font-size: 32px;
         flex-direction: column;
     }
+    
     .flex-item {
-    	margin: 0;
+        margin: 0;
     }
+    
     .github-fork-ribbon {
-	    background-color: #333;
-	}
+        background-color: #333;
+    }
+    
+    #buttons {
+        margin-top: 16px;
+        display: flex;
+        justify-content: center;
+        align-content: center;
+        align-items: center;
+        height: 100%;
+    }
+    
+    #result {
+        font-size: 10px;
+        margin-top: 16px;
+    }
     </style>
-
 </head>
 
 <body>
-	<div class="flex-container">
-		<h1 class="flex-item">pugo.co</h1>	
-		<p class="flex-item">publish on the go</p>
-	</div>
-
-	<div class="github-fork-ribbon-wrapper right-bottom">
-        <div class="github-fork-ribbon">
-            <a href="https://github.com/tklevenz/pugo.co" target="_blank">Fork me on GitHub</a>
+    <div class="flex-container">
+        <h1 class="flex-item">pugo.co</h1>
+        <p class="flex-item">publish on the go</p>
+        <div>
+            <div id="buttons">
+                <form id="trans_form" method="get" action="https://pugo-co-1037.appspot.com/convert">
+                    <button type="button" id="pick" class="mdl-button mdl-js-button mdl-button--raised mdl-button--colored">Pick A Google Doc</button>
+                    <input type="hidden" name="source" id="source">
+                    <input type="hidden" name="token" id="token">
+                    <input type="hidden" name="fname" id="fname">
+                    <button type="submit" id="run_transform" class="mdl-button mdl-js-button mdl-button--raised mdl-button--colored" disabled>Run Transformation</button>
+                </form>
+            </div>
+            <div id="result"></div>
         </div>
     </div>
+    <div class="github-fork-ribbon-wrapper right-bottom">
+        <div class="github-fork-ribbon">
+            <a href="https://github.com/tklevenz/pugo.co" target="_blank">View Project on GitHub</a>
+        </div>
+    </div>
+    <script type="text/javascript" src="https://apis.google.com/js/api.js?onload=onApiLoad"></script>
 </body>
+
 </html>
