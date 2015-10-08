@@ -76,6 +76,14 @@ public class ConvertServlet extends HttpServlet {
 		ByteArrayOutputStream baos = new ByteArrayOutputStream();
 		ZipOutputStream zos = new ZipOutputStream(baos);
 
+		// xhtml to epub
+		InputStream xmlIn = new ByteArrayInputStream(xhtml.toByteArray());
+		ByteArrayOutputStream xmlOut = new ByteArrayOutputStream();
+		String xslPath = this.getServletContext().getRealPath("/docsToEPub.xsl");
+		OutputURIResolver uriResolver = new ZipOutputURIResolver(zos);
+		xslTransform(xslPath, xmlIn, xmlOut, uriResolver);
+		
+		
 		HashMap<String, byte[]> images = getImages(new ByteArrayInputStream(xhtml.toByteArray()));
 		
 		for(Map.Entry<String, byte[]> image : images.entrySet()) {
@@ -83,13 +91,7 @@ public class ConvertServlet extends HttpServlet {
 			zos.write(image.getValue());
 			zos.closeEntry();
 		}
-
-		// xhtml to epub
-		InputStream xmlIn = new ByteArrayInputStream(xhtml.toByteArray());
-		ByteArrayOutputStream xmlOut = new ByteArrayOutputStream();
-		String xslPath = this.getServletContext().getRealPath("/docsToEPub.xsl");
-		OutputURIResolver uriResolver = new ZipOutputURIResolver(zos);
-		xslTransform(xslPath, xmlIn, xmlOut, uriResolver);
+		
 		
 		baos.flush();
 		baos.close();
@@ -99,7 +101,6 @@ public class ConvertServlet extends HttpServlet {
 		response.setContentType("application/zip");
 		response.setHeader("Content-Disposition", "attachment; filename='" + fname + ".epub'");
 
-		out.println("Finished processing...");
 		out.write(baos.toByteArray());
 		out.flush();
 

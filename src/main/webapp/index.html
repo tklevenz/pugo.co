@@ -76,12 +76,12 @@
         <p class="flex-item">publish on the go</p>
         <div>
             <div id="buttons">
-                <form id="trans_form" method="get" action="https://pugo-co-1037.appspot.com/convert">
+                <form id="trans_form" method="get" action="http://localhost:8080/convert">
                     <button type="button" id="pick" class="mdl-button mdl-js-button mdl-button--raised mdl-button--colored">Pick A Google Doc</button>
                     <input type="hidden" name="source" id="source">
                     <input type="hidden" name="token" id="token">
                     <input type="hidden" name="fname" id="fname">
-                    <button type="submit" id="run_transform" class="mdl-button mdl-js-button mdl-button--raised mdl-button--colored" disabled>Run Transformation</button>
+                    <button type="submit" id="run_transform" class="mdl-button mdl-js-button mdl-button--raised mdl-button--colored" disabled>Convert to ePub</button>
                 </form>
             </div>
             <div id="result"></div>
