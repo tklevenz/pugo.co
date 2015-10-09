@@ -1,27 +1,49 @@
 package co.pugo.convert;
 
-import com.google.appengine.api.users.User;
-import com.google.appengine.api.users.UserService;
-import com.google.appengine.api.users.UserServiceFactory;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLConnection;
+import java.net.URLDecoder;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Scanner;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
-import java.io.*;
-import java.net.*;
-import java.util.*;
-import java.util.zip.*;
-import java.util.regex.*;
-
-import javax.servlet.*;
-import javax.servlet.http.*;
-import javax.xml.transform.*;
-import javax.xml.transform.stream.*;
+import javax.servlet.ServletException;
+import javax.servlet.ServletOutputStream;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerConfigurationException;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.stream.StreamResult;
+import javax.xml.transform.stream.StreamSource;
 
 import org.apache.commons.io.IOUtils;
-
 import org.w3c.tidy.Tidy;
+
+import com.google.appengine.api.ThreadManager;
 
 import net.sf.saxon.lib.OutputURIResolver;
 
+@SuppressWarnings("serial")
 public class ConvertServlet extends HttpServlet {
+
+	private ConcurrentHashMap<String, byte[]> images = new ConcurrentHashMap<>();
 
 	public ConvertServlet() {
 		super();
@@ -29,8 +51,7 @@ public class ConvertServlet extends HttpServlet {
 
 	public void init() throws ServletException {
 		super.init();
-		System.setProperty("javax.xml.transform.TransformerFactory", 
-			"net.sf.saxon.TransformerFactoryImpl");
+		System.setProperty("javax.xml.transform.TransformerFactory", "net.sf.saxon.TransformerFactoryImpl");
 	}
 
 	@Override
@@ -44,8 +65,7 @@ public class ConvertServlet extends HttpServlet {
 		convert(source, token, fname, response);
 	}
 
-	private void convert(String source, String token, String fname, HttpServletResponse response) 
-			throws IOException {
+	private void convert(String source, String token, String fname, HttpServletResponse response) throws IOException {
 
 		ServletOutputStream out = response.getOutputStream();
 
@@ -54,10 +74,9 @@ public class ConvertServlet extends HttpServlet {
 			return;
 		}
 
-		// TODO: better downloading!!
 		// download source
 		String sourceUrl = URLDecoder.decode(source, "UTF-8");
-		//out.println("Downloading " + sourceUrl);
+		// out.println("Downloading " + sourceUrl);
 		URL url = new URL(sourceUrl);
 		URLConnection urlConnection = url.openConnection();
 
@@ -65,39 +84,48 @@ public class ConvertServlet extends HttpServlet {
 		if (token != null) {
 			urlConnection.setRequestProperty("Authorization", "Bearer " + token);
 		}
-		
-		//urlConnection.setConnectTimeout(1000);
-		//urlConnection.setReadTimeout(1000);
+
 		InputStream is = urlConnection.getInputStream();
 
-
 		ByteArrayOutputStream xhtml = tidyHtml(is);
-			
+
 		ByteArrayOutputStream baos = new ByteArrayOutputStream();
 		ZipOutputStream zos = new ZipOutputStream(baos);
 
+		HashMap<String, String> imageData = extractedImageData(new ByteArrayInputStream(xhtml.toByteArray()));
+		ExecutorService service = Executors.newCachedThreadPool(ThreadManager.currentRequestThreadFactory());
+
+		if (imageData != null) {
+			for (Map.Entry<String, String> image : imageData.entrySet()) {
+				service.execute(new DownloadImageRunnable(image.getKey(), image.getValue()));
+			}
+		}
+
 		// xhtml to epub
-		InputStream xmlIn = new ByteArrayInputStream(xhtml.toByteArray());
-		ByteArrayOutputStream xmlOut = new ByteArrayOutputStream();
-		String xslPath = this.getServletContext().getRealPath("/docsToEPub.xsl");
-		OutputURIResolver uriResolver = new ZipOutputURIResolver(zos);
-		xslTransform(xslPath, xmlIn, xmlOut, uriResolver);
+		service.execute(new XslTransformRunnable(
+				this.getServletContext().getRealPath("/docsToEPub.xsl"), 
+				new ByteArrayInputStream(xhtml.toByteArray()), 
+				new ZipOutputURIResolver(zos)));
 		
 		
-		HashMap<String, byte[]> images = getImages(new ByteArrayInputStream(xhtml.toByteArray()));
-		
-		for(Map.Entry<String, byte[]> image : images.entrySet()) {
+		service.shutdown();		
+		try {
+			service.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+
+		for (Map.Entry<String, byte[]> image : images.entrySet()) {
 			zos.putNextEntry(new ZipEntry("EPUB/images/" + image.getKey()));
 			zos.write(image.getValue());
 			zos.closeEntry();
 		}
-		
-		
+
 		baos.flush();
 		baos.close();
 		zos.finish();
 		zos.close();
-			
+
 		response.setContentType("application/zip");
 		response.setHeader("Content-Disposition", "attachment; filename='" + fname + ".epub'");
 
@@ -106,56 +134,92 @@ public class ConvertServlet extends HttpServlet {
 
 	}
 
-	private HashMap<String, byte[]> getImages(InputStream is) {
-		HashMap<String, byte[]> imageMap = new HashMap<>();
+	private HashMap<String, String> extractedImageData(InputStream is) {
+		HashMap<String, String> imageData = new HashMap<>();
 
 		Scanner s = new Scanner(is);
 
-		Pattern imgPattern = Pattern.compile("<img(.*?)/>", Pattern.DOTALL);
+		Pattern imgPattern = Pattern.compile("<img(.*?)>", Pattern.DOTALL);
 		Pattern altPattern = Pattern.compile("alt=\"(.*?)\"");
 		Pattern srcPattern = Pattern.compile("src=\"(.*?)\"");
+		Matcher matchSrc, matchAlt;
+		String imgMatch;
 
 		while (s.findWithinHorizon(imgPattern, 0) != null) {
-			String imgMatch = s.match().group(1);
-			Matcher m = altPattern.matcher(imgMatch);
-			String alt = "", src = "";
-			if (m.find())
-				alt = m.group(1);
+			imgMatch = s.match().group(1);
 
-			m = srcPattern.matcher(imgMatch);
-			if (m.find())
-				src = m.group(1);
-			URL srcUrl;
+			matchSrc = srcPattern.matcher(imgMatch);
+			matchAlt = altPattern.matcher(imgMatch);
+
+			if (matchSrc.find() && matchAlt.find()) {
+				imageData.put(matchAlt.group(1), matchSrc.group(1));
+			}
+		}
+
+		s.close();
+		return imageData;
+	}
+
+	public class DownloadImageRunnable implements Runnable {
+		private String alt;
+		private String src;
+
+		public DownloadImageRunnable(String alt, String src) {
+			this.alt = alt;
+			this.src = src;
+		}
+
+		@Override
+		public void run() {
 			try {
-				srcUrl = new URL(src);
+				URL srcUrl = new URL(src);
 				URLConnection urlConnection = srcUrl.openConnection();
-				urlConnection.setConnectTimeout(1000);
-				urlConnection.setReadTimeout(1000);
 
-				InputStream imageIs = urlConnection.getInputStream();
+				InputStream is = urlConnection.getInputStream();
+				images.put(alt, IOUtils.toByteArray(is));
+			} catch (MalformedURLException e) {
+				e.printStackTrace();
 
-				imageMap.put(alt, IOUtils.toByteArray(imageIs));
-			} catch (Exception e) {
-				// TODO Auto-generated catch block
+			} catch (IOException e) {
 				e.printStackTrace();
 			}
 		}
-		s.close();
-		return imageMap;
 	}
 
-	/*
-	 * runs xsl transformation
-	 */
-	private void xslTransform(String xslPath, InputStream is, OutputStream os, OutputURIResolver uriResolver) {
-		TransformerFactory tFactory = TransformerFactory.newInstance();
-		tFactory.setAttribute("http://saxon.sf.net/feature/outputURIResolver", uriResolver);
-		try {
-			Transformer transformer = tFactory.newTransformer(new StreamSource(xslPath));
-			transformer.transform(new StreamSource(is), new StreamResult(os));
-		} catch (Exception e) {
-			e.printStackTrace();
+	public class XslTransformRunnable implements Runnable {
+		private String xslPath;
+		private InputStream is;
+		private OutputURIResolver uriResolver;
+		private OutputStream os;
+
+		public XslTransformRunnable(String xslPath, InputStream is, OutputURIResolver uriResolver) {
+			this.xslPath = xslPath;
+			this.is = is;
+			this.os = new ByteArrayOutputStream();
+			this.uriResolver = uriResolver;
 		}
+
+		@Override
+		public void run() {
+			TransformerFactory tFactory = TransformerFactory.newInstance();
+			tFactory.setAttribute("http://saxon.sf.net/feature/outputURIResolver", uriResolver);
+			try {
+				Transformer transformer = tFactory.newTransformer(new StreamSource(xslPath));
+				transformer.transform(new StreamSource(is), new StreamResult(os));			
+			} catch (TransformerConfigurationException tce) {
+				tce.printStackTrace();
+			} catch (TransformerException te) {
+				te.printStackTrace();
+			} finally {
+				try {
+					is.close();
+					os.close();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}	
+			}
+		}
+
 	}
 
 
