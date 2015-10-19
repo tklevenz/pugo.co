@@ -92,7 +92,7 @@ public class ConvertServlet extends HttpServlet {
 		ByteArrayOutputStream baos = new ByteArrayOutputStream();
 		ZipOutputStream zos = new ZipOutputStream(baos);
 
-		HashMap<String, String> imageData = extractedImageData(new ByteArrayInputStream(xhtml.toByteArray()));
+		HashMap<String, String> imageData = extractImageData(new ByteArrayInputStream(xhtml.toByteArray()));
 		ExecutorService service = Executors.newCachedThreadPool(ThreadManager.currentRequestThreadFactory());
 
 		if (imageData != null) {
@@ -134,7 +134,7 @@ public class ConvertServlet extends HttpServlet {
 
 	}
 
-	private HashMap<String, String> extractedImageData(InputStream is) {
+	private HashMap<String, String> extractImageData(InputStream is) {
 		HashMap<String, String> imageData = new HashMap<>();
 
 		Scanner s = new Scanner(is);
