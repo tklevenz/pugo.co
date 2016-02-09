@@ -41,6 +41,7 @@ function onPickerApiLoad() {
 function handleAuthResult(authResult) {
     if (authResult && !authResult.error) {
         oauthToken = authResult.access_token;
+        console.log("expires_in: " + authResult.expires_in);
         createPicker();
     }
 }
@@ -97,11 +98,11 @@ function pickerCallback(data) {
         console.log(id);
         var request = new XMLHttpRequest();
         request.open('GET', 'https://www.googleapis.com/drive/v2/files/' + id);
-        request.setRequestHeader('Authorization', 'Bearer ' + gapi.auth.getToken().access_token);
+        request.setRequestHeader('Authorization', 'Bearer ' + oauthToken);
 
         request.addEventListener('load', function() {
             var item = JSON.parse(request.responseText);
-            //console.log(item);
+            console.log(item);
 
             exportFile(item, function(responseText) {
                 console.log(responseText);
