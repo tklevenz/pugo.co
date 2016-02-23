@@ -1,4 +1,27 @@
 <!DOCTYPE html>
+<!-- 
+    The MIT License (MIT)
+    
+    Copyright (c) 2016 Tobias Klevenz (tobias.klevenz@gmail.com)
+    
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+    
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+    
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+ -->
 <html>
 
 <head>
@@ -63,9 +86,26 @@
         height: 100%;
     }
     
+    #pick {
+        margin-right: 10px;
+    }
+    
     #result {
         font-size: 10px;
         margin-top: 16px;
+    }
+    
+    #transform_params {
+        width: 300px;
+        display: none;
+        margin-top: 20px;
+        padding: 10px 20px;
+        border: 1px solid;
+    }
+    
+    .mdl-radio {
+        margin: 10px 0px;
+        display: block;
     }
     </style>
 </head>
@@ -75,16 +115,42 @@
         <h1 class="flex-item">pugo.co</h1>
         <p class="flex-item">publish on the go</p>
         <div>
-            <div id="buttons">
-                <form id="trans_form" method="get" action="/convert">
+            <form id="trans_form" method="get" action="/convert">
+                <div id="buttons">
                     <button type="button" id="pick" class="mdl-button mdl-js-button mdl-button--raised mdl-button--colored">Pick A Google Doc</button>
                     <input type="hidden" name="source" id="source">
                     <input type="hidden" name="token" id="token">
                     <input type="hidden" name="fname" id="fname">
                     <button type="submit" id="run_transform" class="mdl-button mdl-js-button mdl-button--raised mdl-button--colored" disabled>Convert to ePub</button>
-                </form>
-            </div>
-            <div id="result"></div>
+                </div>
+                <div id="transform_params">
+                    <h4 class="mdl-dialog__title">Transformation Parameters</h4>
+                    <div class="mdl-textfield mdl-js-textfield">
+                        <input class="mdl-textfield__input" type="text" name="book-id" id="tf-bookId">
+                        <label class="mdl-textfield__label" for="sample1">Book ID</label>
+                    </div>
+                    <div class="mdl-textfield mdl-js-textfield">
+                        <input class="mdl-textfield__input" type="text" name="pub-language" pattern="([a-zA-Z]){2,3}(-([a-zA-Z]){2,5})?" id="tf-pub-lang">
+                        <label class="mdl-textfield__label" for="sample2">Publication Language Code</label>
+                        <span class="mdl-textfield__error">Please insert a valid language Code</span>
+                    </div>
+                    <h5>Grouping Level</h5>
+                    <div id="radio-buttons">
+                        <label for="radio-h1" class="mdl-radio mdl-js-radio">
+                            <input type="radio" class="mdl-radio__button" id="radio-h1" name="grouping-level" value="1" checked>
+                            <span>Heading 1</span>
+                        </label>
+                        <label for="radio-h2" class="mdl-radio mdl-js-radio">
+                            <input type="radio" class="mdl-radio__button" id="radio-h2" name="grouping-level" value="2">
+                            <span>Heading 2</span>
+                        </label>
+                        <label for="radio-h3" class="mdl-radio mdl-js-radio">
+                            <input type="radio" class="mdl-radio__button" id="radio-h3" name="grouping-level" value="3">
+                            <span>Heading 3</span>
+                        </label>
+                    </div>
+                </div>
+            </form>
         </div>
     </div>
     <div class="github-fork-ribbon-wrapper right-bottom">

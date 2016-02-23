@@ -1,3 +1,27 @@
+/*
+	The MIT License (MIT)
+	
+	Copyright (c) 2016 Tobias Klevenz (tobias.klevenz@gmail.com)
+	
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so, subject to the following conditions:
+	
+	The above copyright notice and this permission notice shall be included in all
+	copies or substantial portions of the Software.
+	
+	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+	SOFTWARE.
+*/
+
 package co.pugo.convert;
 
 import java.io.ByteArrayInputStream;
@@ -52,7 +76,10 @@ import com.google.appengine.api.ThreadManager;
 @SuppressWarnings("serial")
 public class ConvertServlet extends HttpServlet {
 
-	private static final Logger log = Logger.getLogger(ConvertServlet.class.getSimpleName());
+	private static final Logger LOG = Logger.getLogger(ConvertServlet.class.getSimpleName());
+	private static final String PARAM_BOOK_ID = "book-id"; 
+	private static final String PARAM_PUB_LANGUAGE = "pub-language";
+	private static final String PARAM_GROUPING_LEVEL = "grouping-level";
 
 	@Override
 	protected void service(HttpServletRequest request, HttpServletResponse response)
@@ -61,6 +88,12 @@ public class ConvertServlet extends HttpServlet {
 		final String source = request.getParameter("source");
 		final String token = request.getParameter("token");
 		final String fname = request.getParameter("fname");
+		
+		final String bookId = request.getParameter(PARAM_BOOK_ID);
+		final String pubLanguage = request.getParameter(PARAM_PUB_LANGUAGE);
+		final int groupingLevel = Integer.parseInt(request.getParameter(PARAM_GROUPING_LEVEL));
+		
+		
 
 		// download source
 		final String sourceUrl = URLDecoder.decode(source, "UTF-8");
@@ -90,7 +123,7 @@ public class ConvertServlet extends HttpServlet {
 							URLConnection urlConnection = srcUrl.openConnection();
 							return IOUtils.toByteArray(urlConnection.getInputStream());
 						} catch (IOException e) {
-							log.severe(e.getMessage());
+							LOG.severe(e.getMessage());
 							return null;
 						}
 					}
@@ -101,7 +134,7 @@ public class ConvertServlet extends HttpServlet {
 				try {
 					imageData.put(imageLink, Base64.encodeBase64String(future.get()));
 				} catch (InterruptedException | ExecutionException e) {
-					log.severe(e.getMessage());
+					LOG.severe(e.getMessage());
 				}
 			}
 		}
@@ -124,15 +157,18 @@ public class ConvertServlet extends HttpServlet {
 
 				try {
 					Transformer transformer = tFactory.newTransformer(new StreamSource(xslPath));
+					transformer.setParameter(PARAM_BOOK_ID, bookId);
+					transformer.setParameter(PARAM_PUB_LANGUAGE, pubLanguage);
+					transformer.setParameter(PARAM_GROUPING_LEVEL, groupingLevel);
 					transformer.transform(new StreamSource(inputStream), new StreamResult(outputStream));
 				} catch (TransformerException te) {
-					log.severe(te.getMessage());
+					LOG.severe(te.getMessage());
 				} finally {
 					try {
 						inputStream.close();
 						outputStream.close();
 					} catch (IOException e) {
-						log.severe(e.getMessage());
+						LOG.severe(e.getMessage());
 					}
 				}
 
@@ -143,7 +179,7 @@ public class ConvertServlet extends HttpServlet {
 		try {
 			service.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
 		} catch (InterruptedException e) {
-			log.severe(e.getMessage());
+			LOG.severe(e.getMessage());
 		}
 
 		baos.flush();
@@ -159,7 +195,7 @@ public class ConvertServlet extends HttpServlet {
 	}
 
 	/*
-	 * @return a HashMap containing image data
+	 * @return a Set containing image data
 	 */
 	private Set<String> extractImageLinks(InputStream inputStream) {
 		System.err.println("Extracting image data...");
