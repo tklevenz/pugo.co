@@ -142,7 +142,7 @@
                     </dc:identifier>
                     <meta property="dcterms:modified">
                         <xsl:value-of
-                            select="format-dateTime(current-dateTime(), '[Y0001]-[M01]-[D01]T[H]:[m]:[s]Z')"
+                            select="concat(substring(string(current-dateTime()),1,19),'Z')"
                         />
                     </meta>
                 </metadata>
