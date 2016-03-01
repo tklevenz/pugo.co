@@ -32,7 +32,7 @@
 
     <xsl:param name="pub-language" select="'en'"/>
     <xsl:param name="book-id" select="concat('http://pugo.co/', replace($title, ' ', ''))"/>
-    <xsl:param name="grouping-level" as="xs:integer" select="2"/>
+    <xsl:param name="grouping-level" as="xs:integer" select="3"/>
 
 
     <!-- 
@@ -142,12 +142,11 @@
                     </dc:identifier>
                     <meta property="dcterms:modified">
                         <xsl:value-of
-                            select="concat(substring(string(current-dateTime()),1,19),'Z')"
-                        />
+                            select="concat(substring(string(current-dateTime()), 1, 19), 'Z')"/>
                     </meta>
                 </metadata>
                 <manifest>
-                    <!--<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>-->
+                    <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
                     <item id="htmltoc" properties="nav" media-type="application/xhtml+xml"
                         href="toc.xhtml"/>
                     <item id="front_cover" href="front-cover.xhtml"
@@ -157,20 +156,9 @@
                             href="{pfn:generateFileName(section)}.xhtml"
                             media-type="application/xhtml+xml"/>
                     </xsl:for-each>
-                    <!--<xsl:for-each-group select="$chapters//img" group-by="@src">
-                        <xsl:variable name="name"
-                            select="
-                                if (@alt = '') then
-                                    concat('image', count(preceding::img[@alt = '']) + 1, '.png')
-                                else
-                                    @alt"/>
-                        <item id="{$name}" href="images/{$name}"
-                            media-type="image/{replace(tokenize($name,'\.')[last()],'jpg','jpeg','i')}"
-                        />
-                    </xsl:for-each-group>-->
                     <item id="style" href="stylesheet.css" media-type="text/css"/>
                 </manifest>
-                <spine>
+                <spine toc="ncx">
                     <itemref idref="front_cover"/>
                     <xsl:for-each select="$chapters/*">
                         <itemref idref="{pfn:generateItemID(section)}"/>
@@ -227,18 +215,19 @@
         <xsl:apply-templates select="$chapters/*"/>
 
 
-        <!-- toc.ncx 
+        <!-- 
+            toc.ncx 
             
             toc.ncx is needed for epub 2.0 compatibility
             there could be problems with a nested structure and certain devices:
             http://epubsecrets.com/nesting-your-toc-in-the-ncx-file-and-the-nookkindle-workaround.php
-            
-            
+        -->
+
         <xsl:result-document href="EPUB/toc.ncx">
             <ncx xmlns:ncx="http://www.daisy.org/z3986/2005/ncx/"
                 xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1" xml:lang="en">
                 <head>
-                    <meta name="dtb:uid" content="http://example.org/dummy/URIstub/"/>
+                    <meta name="dtb:uid" content="{$book-id}"/>
                     <meta name="dtb:depth" content="1"/>
                     <meta name="dtb:totalPageCount" content="0"/>
                     <meta name="dtb:maxPageNumber" content="0"/>
@@ -247,27 +236,10 @@
                     <text/>
                 </docTitle>
                 <navMap>
-                    <navPoint id="front_cover" playOrder="1">
-                        <navLabel>
-                            <text>
-                                <xsl:value-of select="$title"/>
-                            </text>
-                        </navLabel>
-                        <content src="front-cover.xhtml"/>
-                    </navPoint>
-                    <xsl:for-each select="$chapters/*">
-                        <navPoint id="chapter{position()}" playOrder="{position()+1}">
-                            <navLabel>
-                                <text>
-                                    <xsl:value-of select="h1"/>
-                                </text>
-                            </navLabel>
-                            <content src="chapter{position()}.xhtml"/>
-                        </navPoint>
-                    </xsl:for-each>
+                    <xsl:apply-templates select="$chapters/*" mode="toc.ncx"/>
                 </navMap>
             </ncx>
-        </xsl:result-document>-->
+        </xsl:result-document>
 
         <!-- toc.xhtml -->
         <xsl:result-document href="EPUB/toc.xhtml" method="xhtml">
@@ -278,12 +250,7 @@
                 <body>
                     <nav epub:type="toc" id="toc">
                         <ol>
-                            <li>
-                                <a href="front-cover.xhtml">
-                                    <xsl:value-of select="$title"/>
-                                </a>
-                            </li>
-                            <xsl:apply-templates select="$chapters/*" mode="toc"/>
+                            <xsl:apply-templates select="$chapters/*" mode="toc.xhtml"/>
                         </ol>
                     </nav>
                 </body>
@@ -321,7 +288,7 @@
 
 
 
-    <xsl:template match="section" mode="toc">
+    <xsl:template match="section" mode="toc.xhtml">
         <xsl:variable name="fileName" select="pfn:generateFileName(ancestor::chapter/section)"/>
         <xsl:variable name="subchapter"
             select="
@@ -336,10 +303,32 @@
             </a>
             <xsl:if test="section[@epub:type = 'subchapter']">
                 <ol>
-                    <xsl:apply-templates select="section" mode="toc"/>
+                    <xsl:apply-templates select="section" mode="toc.xhtml"/>
                 </ol>
             </xsl:if>
         </li>
+    </xsl:template>
+
+    <xsl:template match="section" mode="toc.ncx">
+        <xsl:variable name="fileName" select="pfn:generateFileName(ancestor::chapter/section)"/>
+        <xsl:variable name="subchapter"
+            select="
+                if (@epub:type = 'subchapter') then
+                    concat('#', pfn:generateChapterID(.))
+                else
+                    ''"/>
+        <xsl:variable name="playOrder" select="count(preceding::section | ancestor::section) + 1"/>
+        <navPoint xmlns="http://www.daisy.org/z3986/2005/ncx/"
+            id="navPoint-{$playOrder}" playOrder="{$playOrder}">
+            <navLabel>
+                <text>
+                    <xsl:variable name="heading" select="h1 | h2 | h3"/>
+                    <xsl:value-of select="$heading[1] | .[not($heading != '')]/@epub:type"/>
+                </text>
+            </navLabel>
+            <content src="{$fileName}.xhtml{$subchapter}"/>
+            <xsl:apply-templates select="section" mode="toc.ncx"/>
+        </navPoint>
     </xsl:template>
 
     <xsl:template match="node() | @*">
