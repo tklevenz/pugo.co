@@ -32,6 +32,7 @@ var clientId = "136953074513-i7d6p1a26ni6uapq9md64nr1obu7mp9m.apps.googleusercon
 var scope = ['https://www.googleapis.com/auth/drive.readonly'];
 
 var pickerApiLoaded = false;
+var authClicked = false;
 var oauthToken;
 
 // Use the API Loader script to load google.picker and gapi.auth.
@@ -52,14 +53,22 @@ function handleAuthResult(authResult) {
     var pickButton = document.getElementById('pick');
     if (authResult && !authResult.error) {
         oauthToken = authResult.access_token;
-        pickButton.onclick = createPicker;
-        loadPicker();
+        if (pickerApiLoaded) {
+            pickButton.onclick = createPicker;
+        } else {
+            if (authClicked) {
+                loadPicker();
+            }
+            pickButton.onclick = loadPicker;
+        }
     } else {
         pickButton.onclick = handleAuthClick;
     }
 }
 
 function handleAuthClick(event) {
+    authClicked = true;
+
     gapi.auth.authorize({
         client_id: clientId,
         scope: scope,
