@@ -26,7 +26,7 @@
 var developerKey = 'AIzaSyCHy_B7FYOaOMeG-2-grtZdsoARTmTZO3Q';
 
 // The Client ID obtained from the Google Developers Console. Replace with your own Client ID.
-var clientId = "136953074513-i7d6p1a26ni6uapq9md64nr1obu7mp9m.apps.googleusercontent.com"
+var clientId = "136953074513-i7d6p1a26ni6uapq9md64nr1obu7mp9m.apps.googleusercontent.com";
 
 // Scope to use to access user's documents.
 var scope = ['https://www.googleapis.com/auth/drive.readonly'];

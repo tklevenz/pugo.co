@@ -24,10 +24,7 @@
 
 package co.pugo.convert;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.net.URL;
 import java.net.URLConnection;
 import java.net.URLDecoder;
@@ -54,22 +51,25 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
 
+import org.w3c.dom.Document;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.io.IOUtils;
 import org.apache.tika.Tika;
 import org.w3c.tidy.Tidy;
 
 import com.google.appengine.api.ThreadManager;
+import org.xml.sax.SAXException;
 
 /**
- * 
- *
  * @author Tobias Klevenz (tobias.klevenz@gmail.com) Project work for M.CSc at
  *         Trier University of Applied Science.
  */
@@ -77,23 +77,28 @@ import com.google.appengine.api.ThreadManager;
 public class ConvertServlet extends HttpServlet {
 
 	private static final Logger LOG = Logger.getLogger(ConvertServlet.class.getSimpleName());
-	private static final String PARAM_BOOK_ID = "book-id"; 
-	private static final String PARAM_PUB_LANGUAGE = "pub-language";
-	private static final String PARAM_GROUPING_LEVEL = "grouping-level";
+
+	private static final String CONFIG_FILE = "/config.xml";
+	private static final String CONFIG_XSL_TAG = "xsl";
+	private static final String CONFIG_OUTPUT_EXT_TAG = "outputExt";
+	private static final String CONFIG_ZIP_OUTPUT_TAG = "zipOutput";
+	private static final String PARAM_SOURCE = "source";
+	private static final String PARAM_TOKEN = "token";
+	private static final String PARAM_FNAME = "fname";
+
+	private static String xsl;
+	private static String outputExt;
+	private static boolean zipOutput;
 
 	@Override
-	protected void service(HttpServletRequest request, HttpServletResponse response)
+	protected void service(final HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
 
-		final String source = request.getParameter("source");
-		final String token = request.getParameter("token");
-		final String fname = request.getParameter("fname");
-		
-		final String bookId = request.getParameter(PARAM_BOOK_ID);
-		final String pubLanguage = request.getParameter(PARAM_PUB_LANGUAGE);
-		final int groupingLevel = Integer.parseInt(request.getParameter(PARAM_GROUPING_LEVEL));
-		
-		
+		readConfig();
+
+		final String source = request.getParameter(PARAM_SOURCE);
+		final String token = request.getParameter(PARAM_TOKEN);
+		final String fname = request.getParameter(PARAM_FNAME);
 
 		// download source
 		final String sourceUrl = URLDecoder.decode(source, "UTF-8");
@@ -139,7 +144,7 @@ public class ConvertServlet extends HttpServlet {
 			}
 		}
 
-		final String xslPath = this.getServletContext().getRealPath("/docsToEPub.xsl");
+		final String xslPath = this.getServletContext().getRealPath(xsl);
 
 		service.execute(new Runnable() {
 
@@ -148,7 +153,8 @@ public class ConvertServlet extends HttpServlet {
 				final TransformerFactory tFactory = new net.sf.saxon.TransformerFactoryImpl();
 				// OutputURIResolver to write files created using
 				// xsl:result-document to zipstream
-				tFactory.setAttribute("http://saxon.sf.net/feature/outputURIResolver", new ZipOutputURIResolver(zos));
+				if (zipOutput)
+					tFactory.setAttribute("http://saxon.sf.net/feature/outputURIResolver", new ZipOutputURIResolver(zos));
 
 				final ByteArrayInputStream inputStream = new ByteArrayInputStream(
 						replaceImgSrcWithBase64(new ByteArrayInputStream(xhtml.toByteArray()), imageData)
@@ -157,9 +163,9 @@ public class ConvertServlet extends HttpServlet {
 
 				try {
 					Transformer transformer = tFactory.newTransformer(new StreamSource(xslPath));
-					transformer.setParameter(PARAM_BOOK_ID, bookId);
-					transformer.setParameter(PARAM_PUB_LANGUAGE, pubLanguage);
-					transformer.setParameter(PARAM_GROUPING_LEVEL, groupingLevel);
+
+					getXsltParameters(request, transformer);
+
 					transformer.transform(new StreamSource(inputStream), new StreamResult(outputStream));
 				} catch (TransformerException te) {
 					LOG.severe(te.getMessage());
@@ -188,11 +194,66 @@ public class ConvertServlet extends HttpServlet {
 		zos.close();
 
 		response.setContentType("application/zip");
-		response.setHeader("Content-Disposition", "attachment; filename='" + fname + ".epub'");
+		response.setHeader("Content-Disposition", "attachment; filename='" + fname + "." + outputExt);
 
 		response.getOutputStream().write(baos.toByteArray());
 		response.getOutputStream().flush();
 	}
+
+	private void readConfig() {
+		File configFile = new File(this.getServletContext().getRealPath(CONFIG_FILE));
+		DocumentBuilderFactory documentBuilderFactory = DocumentBuilderFactory.newInstance();
+		try {
+			DocumentBuilder documentBuilder = documentBuilderFactory.newDocumentBuilder();
+			Document document = documentBuilder.parse(configFile);
+			xsl = getConfigElementTextContent(document, CONFIG_XSL_TAG);
+			outputExt = getConfigElementTextContent(document, CONFIG_OUTPUT_EXT_TAG);
+			zipOutput = getConfigElementTextContent(document, CONFIG_ZIP_OUTPUT_TAG).equals("true");
+		} catch (ParserConfigurationException | SAXException | IOException e) {
+			LOG.severe("Error reading config.xml: " + e.getMessage());
+			e.printStackTrace();
+		}
+	}
+
+	private String getConfigElementTextContent(Document document, String tag) {
+		return document.getElementsByTagName(tag).item(0).getTextContent();
+	}
+
+
+	private void getXsltParameters(HttpServletRequest request, Transformer transformer) {
+
+		Map paramtereMap = request.getParameterMap();
+		Iterator iterator = paramtereMap.entrySet().iterator();
+		Pattern xslParamPattern = Pattern.compile("^xslParam_(.*?)$");
+		Pattern boolPattern = Pattern.compile("(^true$|^false$)");
+
+		Matcher matcher;
+		String parameterName, xslParameter, xslParameterValue;
+		while (iterator.hasNext()) {
+			Map.Entry<String, String[]> entry = (Entry<String, String[]>) iterator.next();
+			Integer intValue = null;
+			parameterName = entry.getKey();
+			matcher = xslParamPattern.matcher(parameterName);
+			if (matcher.find()) {
+				xslParameter = matcher.group(1);
+				xslParameterValue = entry.getValue()[0];
+				matcher = boolPattern.matcher(xslParameterValue);
+				try {
+					intValue = Integer.parseInt(xslParameterValue);
+				} catch (NumberFormatException e) {}
+				if (intValue != null) {
+					transformer.setParameter(xslParameter, intValue);
+				}
+				else if (matcher.find()) {
+					transformer.setParameter(xslParameter, xslParameterValue.equals("true"));
+				}
+				else {
+					transformer.setParameter(xslParameter, xslParameterValue);
+				}
+			}
+		}
+	}
+
 
 	/*
 	 * @return a Set containing image data
@@ -205,27 +266,14 @@ public class ConvertServlet extends HttpServlet {
 		final Scanner scanner = new Scanner(inputStream);
 
 		final Pattern imgPattern = Pattern.compile("<img(.*?)>", Pattern.DOTALL);
-		// final Pattern altPattern = Pattern.compile("alt=\"(.*?)\"");
 		final Pattern srcPattern = Pattern.compile("src=\"(.*?)\"");
 
 		Matcher matchSrc;
-		// Matcher matchAlt;
 		String imgMatch;
-		// int i = 1;
 
 		while (scanner.findWithinHorizon(imgPattern, 0) != null) {
 			imgMatch = scanner.match().group(1);
-
 			matchSrc = srcPattern.matcher(imgMatch);
-			// matchAlt = altPattern.matcher(imgMatch);
-			/*
-			 * if (matchSrc.find() && matchAlt.find()) { if
-			 * (matchAlt.group(1).equals("")) { key = "image" + i + ".png"; i++;
-			 * } else { key = matchAlt.group(1); } imageData.put(key,
-			 * matchSrc.group(1)); System.err.println(key + ": " +
-			 * matchSrc.group(1)); }
-			 */
-
 			if (matchSrc.find())
 				imageLinks.add(matchSrc.group(1));
 		}
@@ -239,7 +287,7 @@ public class ConvertServlet extends HttpServlet {
 			String content = IOUtils.toString(is);
 			Iterator<Entry<String, String>> iterator = imageData.entrySet().iterator();
 			while (iterator.hasNext()) {
-				Map.Entry<String, String> entry = (Entry<String, String>) iterator.next();
+				Map.Entry<String, String> entry = iterator.next();
 				String base64String = entry.getValue();
 				Tika tika = new Tika();
 				String mimeType = tika.detect(Base64.decodeBase64(base64String));
