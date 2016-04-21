@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config>
+    <!-- XSLT Stylesheet used for the transformation -->
+    <xsl>md.xsl</xsl>
+    <!-- Extension of Output file -->
+    <outputExt>md</outputExt>
+    <!-- HttpServletResponse.setContentType -->
+    <mimeType>text/plain</mimeType>
+    <!--
+        If true files generated with xsl:result-document
+        will be written to a zip file,
+        standard output will be discarded
+    -->
+    <zipOutput>false</zipOutput>
+</config>

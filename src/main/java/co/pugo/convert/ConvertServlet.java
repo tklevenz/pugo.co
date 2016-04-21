@@ -25,6 +25,7 @@
 package co.pugo.convert;
 
 import java.io.*;
+import java.io.ByteArrayOutputStream;
 import java.net.URL;
 import java.net.URLConnection;
 import java.net.URLDecoder;
@@ -35,13 +36,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Scanner;
 import java.util.Set;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.FutureTask;
-import java.util.concurrent.RunnableFuture;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -55,6 +50,7 @@ import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerConfigurationException;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.stream.StreamResult;
@@ -78,136 +74,151 @@ public class ConvertServlet extends HttpServlet {
 
 	private static final Logger LOG = Logger.getLogger(ConvertServlet.class.getSimpleName());
 
-	private static final String CONFIG_FILE = "/config.xml";
+	private static final String CONFIG_FILE = "config_html.xml";
 	private static final String CONFIG_XSL_TAG = "xsl";
+
 	private static final String CONFIG_OUTPUT_EXT_TAG = "outputExt";
+	private static final String CONFIG_MIMETYPE_TAG = "mimeType";
 	private static final String CONFIG_ZIP_OUTPUT_TAG = "zipOutput";
+
 	private static final String PARAM_SOURCE = "source";
 	private static final String PARAM_TOKEN = "token";
 	private static final String PARAM_FNAME = "fname";
 
 	private static String xsl;
 	private static String outputExt;
+	private static String mimeType;
 	private static boolean zipOutput;
 
+	private String source;
+	private String token;
+	private String fname;
+	private Map<String, String> xslParamMap = new HashMap<>();
+
 	@Override
-	protected void service(final HttpServletRequest request, HttpServletResponse response)
+	protected void service(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
 
-		readConfig();
+		parseParams(request, response);
 
-		final String source = request.getParameter(PARAM_SOURCE);
-		final String token = request.getParameter(PARAM_TOKEN);
-		final String fname = request.getParameter(PARAM_FNAME);
+		readConfig(CONFIG_FILE);
 
 		// download source
-		final String sourceUrl = URLDecoder.decode(source, "UTF-8");
-		final URL url = new URL(sourceUrl);
-		final URLConnection urlConnection = url.openConnection();
-		// if token is supplied set auth token
-		if (token != null)
-			urlConnection.setRequestProperty("Authorization", "Bearer " + token);
+		String sourceUrl = URLDecoder.decode(source, "UTF-8");
+		URL url = new URL(sourceUrl);
+		URLConnection urlConnection = url.openConnection();
 
-		final ByteArrayOutputStream xhtml = tidyHtml(urlConnection.getInputStream());
+		urlConnection.setRequestProperty("Authorization", "Bearer " + token);
 
-		final ByteArrayOutputStream baos = new ByteArrayOutputStream();
-		final ZipOutputStream zos = new ZipOutputStream(baos);
+		ByteArrayOutputStream xhtml = tidyHtml(urlConnection.getInputStream());
 
-		final Set<String> imageLinks = extractImageLinks(new ByteArrayInputStream(xhtml.toByteArray()));
-		final HashMap<String, String> imageData = new HashMap<>();
-		final ExecutorService service = Executors.newCachedThreadPool(ThreadManager.currentRequestThreadFactory());
+		Set<String> imageLinks = extractImageLinks(new ByteArrayInputStream(xhtml.toByteArray()));
+		HashMap<String, String> imageData = new HashMap<>();
 
 		if (imageLinks != null) {
-			for (final String imageLink : imageLinks) {
-
-				RunnableFuture<byte[]> future = new FutureTask<>(new Callable<byte[]>() {
-					@Override
-					public byte[] call() {
-						try {
-							URL srcUrl = new URL(imageLink);
-							URLConnection urlConnection = srcUrl.openConnection();
-							return IOUtils.toByteArray(urlConnection.getInputStream());
-						} catch (IOException e) {
-							LOG.severe(e.getMessage());
-							return null;
-						}
-					}
-				});
-
-				service.execute(future);
-
-				try {
-					imageData.put(imageLink, Base64.encodeBase64String(future.get()));
-				} catch (InterruptedException | ExecutionException e) {
-					LOG.severe(e.getMessage());
-				}
-			}
+			downloadImageData(imageLinks, imageData);
+			xhtml = replaceImgSrcWithBase64(new ByteArrayInputStream(xhtml.toByteArray()), imageData);
 		}
 
-		final String xslPath = this.getServletContext().getRealPath(xsl);
 
-		service.execute(new Runnable() {
 
-			@Override
-			public void run() {
-				final TransformerFactory tFactory = new net.sf.saxon.TransformerFactoryImpl();
-				// OutputURIResolver to write files created using
-				// xsl:result-document to zipstream
-				if (zipOutput)
-					tFactory.setAttribute("http://saxon.sf.net/feature/outputURIResolver", new ZipOutputURIResolver(zos));
+		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		ZipOutputStream zos = null;
 
-				final ByteArrayInputStream inputStream = new ByteArrayInputStream(
-						replaceImgSrcWithBase64(new ByteArrayInputStream(xhtml.toByteArray()), imageData)
-								.toByteArray());
-				final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+		String xslPath = this.getServletContext().getRealPath(xsl);
+		InputStream inputStream = new ByteArrayInputStream(xhtml.toByteArray());
 
-				try {
-					Transformer transformer = tFactory.newTransformer(new StreamSource(xslPath));
+		Transformation transformation;
 
-					getXsltParameters(request, transformer);
-
-					transformer.transform(new StreamSource(inputStream), new StreamResult(outputStream));
-				} catch (TransformerException te) {
-					LOG.severe(te.getMessage());
-				} finally {
-					try {
-						inputStream.close();
-						outputStream.close();
-					} catch (IOException e) {
-						LOG.severe(e.getMessage());
-					}
-				}
-
-			}
-		});
-
-		service.shutdown();
-		try {
-			service.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
-		} catch (InterruptedException e) {
-			LOG.severe(e.getMessage());
+		if (zipOutput) {
+			zos =  new ZipOutputStream(baos);
+			transformation = new Transformation(xslPath, inputStream, zos);
+		} else {
+			transformation = new Transformation(xslPath, inputStream, baos);
 		}
+
+		setXsltParameters(transformation);
+
+		ThreadManager.createThreadForCurrentRequest(transformation).run();
 
 		baos.flush();
 		baos.close();
-		zos.finish();
-		zos.close();
 
-		response.setContentType("application/zip");
+		if (zos != null) {
+			zos.finish();
+			zos.close();
+		}
+
+		response.setContentType(mimeType);
 		response.setHeader("Content-Disposition", "attachment; filename='" + fname + "." + outputExt);
 
 		response.getOutputStream().write(baos.toByteArray());
 		response.getOutputStream().flush();
 	}
 
-	private void readConfig() {
-		File configFile = new File(this.getServletContext().getRealPath(CONFIG_FILE));
+	private void parseParams(HttpServletRequest request, HttpServletResponse response) throws IOException {
+		if (request.getParameterMap().size() == 0) {
+			printOut(response, "No Parameters specified, requirted Parameters are: \n"
+					+ "/convert?source=[googleDocs-ExportLink]&token=[OAuthToken]&fname=[OutputFileName]");
+			return;
+		}
+
+		Map paramtereMap = request.getParameterMap();
+		Iterator iterator = paramtereMap.entrySet().iterator();
+
+		Pattern xslParamPattern = Pattern.compile("^xslParam_(.*?)$");
+
+		Matcher matcher;
+		String paramName, paramValue;
+
+		while (iterator.hasNext()) {
+			Map.Entry<String, String[]> entry = (Entry<String, String[]>) iterator.next();
+			paramName = entry.getKey();
+			paramValue = entry.getValue()[0];
+			matcher = xslParamPattern.matcher(paramName);
+			if (paramName.equals(PARAM_SOURCE))
+				source = paramValue;
+			else if (paramName.equals(PARAM_TOKEN))
+				token = paramValue;
+			else if (paramName.equals(PARAM_FNAME))
+				fname = paramValue;
+			else if (matcher.find())
+				xslParamMap.put(matcher.group(1), paramValue);
+		}
+
+		if (source == null) {
+			printOut(response, "No source provided");
+			return;
+		}
+
+		if (token == null) {
+			printOut(response, "No token provided");
+			return;
+		}
+
+		if (fname == null) {
+			printOut(response, "No fname provided");
+			return;
+		}
+
+
+	}
+
+
+	private void printOut(HttpServletResponse response, String str) throws IOException {
+		PrintWriter out = response.getWriter();
+		out.println(str);
+	}
+
+	private void readConfig(String config) {
+		File configFile = new File(this.getServletContext().getRealPath(config));
 		DocumentBuilderFactory documentBuilderFactory = DocumentBuilderFactory.newInstance();
 		try {
 			DocumentBuilder documentBuilder = documentBuilderFactory.newDocumentBuilder();
 			Document document = documentBuilder.parse(configFile);
 			xsl = getConfigElementTextContent(document, CONFIG_XSL_TAG);
 			outputExt = getConfigElementTextContent(document, CONFIG_OUTPUT_EXT_TAG);
+			mimeType = getConfigElementTextContent(document, CONFIG_MIMETYPE_TAG);
 			zipOutput = getConfigElementTextContent(document, CONFIG_ZIP_OUTPUT_TAG).equals("true");
 		} catch (ParserConfigurationException | SAXException | IOException e) {
 			LOG.severe("Error reading config.xml: " + e.getMessage());
@@ -220,37 +231,26 @@ public class ConvertServlet extends HttpServlet {
 	}
 
 
-	private void getXsltParameters(HttpServletRequest request, Transformer transformer) {
-
-		Map paramtereMap = request.getParameterMap();
-		Iterator iterator = paramtereMap.entrySet().iterator();
-		Pattern xslParamPattern = Pattern.compile("^xslParam_(.*?)$");
-		Pattern boolPattern = Pattern.compile("(^true$|^false$)");
-
-		Matcher matcher;
-		String parameterName, xslParameter, xslParameterValue;
-		while (iterator.hasNext()) {
-			Map.Entry<String, String[]> entry = (Entry<String, String[]>) iterator.next();
-			Integer intValue = null;
-			parameterName = entry.getKey();
-			matcher = xslParamPattern.matcher(parameterName);
-			if (matcher.find()) {
-				xslParameter = matcher.group(1);
-				xslParameterValue = entry.getValue()[0];
-				matcher = boolPattern.matcher(xslParameterValue);
-				try {
-					intValue = Integer.parseInt(xslParameterValue);
-				} catch (NumberFormatException e) {}
-				if (intValue != null) {
-					transformer.setParameter(xslParameter, intValue);
-				}
-				else if (matcher.find()) {
-					transformer.setParameter(xslParameter, xslParameterValue.equals("true"));
-				}
-				else {
-					transformer.setParameter(xslParameter, xslParameterValue);
-				}
+	private void setXsltParameters(Transformation transformation) {
+		Integer intValue = null;
+		String param, value;
+		for (Map.Entry<String, String> entry : xslParamMap.entrySet()) {
+			param = entry.getKey();
+			value = entry.getValue();
+			try {
+				intValue = Integer.parseInt(value);
+			} catch (NumberFormatException ignored) {
 			}
+
+			// pass Integer to transformer
+			if (intValue != null)
+				transformation.setParameter(param, intValue);
+				// pass boolean to transformer
+			else if (value.equals("true") || value.equals("false"))
+				transformation.setParameter(param, value.equals("true"));
+				// pass String to transformer
+			else
+				transformation.setParameter(param, value);
 		}
 	}
 
@@ -282,12 +282,47 @@ public class ConvertServlet extends HttpServlet {
 		return imageLinks;
 	}
 
+	private void downloadImageData(Set<String> imageLinks, HashMap<String, String> imageData) {
+
+		ExecutorService service = Executors.newCachedThreadPool(ThreadManager.currentRequestThreadFactory());
+
+		for (final String imageLink : imageLinks) {
+			RunnableFuture<byte[]> future = new FutureTask<>(new Callable<byte[]>() {
+				@Override
+				public byte[] call() {
+					try {
+						URL srcUrl = new URL(imageLink);
+						URLConnection urlConnection = srcUrl.openConnection();
+						return IOUtils.toByteArray(urlConnection.getInputStream());
+					} catch (IOException e) {
+						LOG.severe(e.getMessage());
+						return null;
+					}
+				}
+			});
+
+			service.execute(future);
+
+			try {
+				imageData.put(imageLink, Base64.encodeBase64String(future.get()));
+			} catch (InterruptedException | ExecutionException e) {
+				LOG.severe(e.getMessage());
+			}
+		}
+
+		service.shutdown();
+
+		try {
+			service.awaitTermination(Long.MAX_VALUE, TimeUnit.NANOSECONDS);
+		} catch (InterruptedException e) {
+			LOG.severe(e.getMessage());
+		}
+	}
+
 	private ByteArrayOutputStream replaceImgSrcWithBase64(InputStream is, Map<String, String> imageData) {
 		try {
 			String content = IOUtils.toString(is);
-			Iterator<Entry<String, String>> iterator = imageData.entrySet().iterator();
-			while (iterator.hasNext()) {
-				Map.Entry<String, String> entry = iterator.next();
+			for (Entry<String, String> entry : imageData.entrySet()) {
 				String base64String = entry.getValue();
 				Tika tika = new Tika();
 				String mimeType = tika.detect(Base64.decodeBase64(base64String));
@@ -313,5 +348,48 @@ public class ConvertServlet extends HttpServlet {
 		tidy.setXHTML(true);
 		tidy.parse(in, baos);
 		return baos;
+	}
+
+	private class Transformation implements Runnable {
+		private TransformerFactory transformerFactory = new net.sf.saxon.TransformerFactoryImpl();
+		private Transformer transformer;
+		private InputStream inputStream;
+		private OutputStream outputStream;
+
+		public Transformation(String xslPath, InputStream inputStream, OutputStream outputStream) {
+			this.inputStream = inputStream;
+			this.outputStream = outputStream;
+
+			if (outputStream instanceof ZipOutputStream)
+				transformerFactory.setAttribute("http://saxon.sf.net/feature/outputURIResolver",
+						new ZipOutputURIResolver((ZipOutputStream) outputStream));
+
+			try {
+				transformer = transformerFactory.newTransformer(new StreamSource(xslPath));
+			} catch (TransformerConfigurationException e) {
+				e.printStackTrace();
+			}
+
+		}
+
+		void setParameter(String name, Object parameter) {
+			transformer.setParameter(name, parameter);
+		}
+
+		@Override
+		public void run() {
+			StreamResult result;
+
+			if (outputStream instanceof ZipOutputStream)
+				result = new StreamResult(new ByteArrayOutputStream());
+			else
+				result = new StreamResult(outputStream);
+
+			try {
+				transformer.transform(new StreamSource(inputStream), result);
+			} catch (TransformerException e) {
+				e.printStackTrace();
+			}
+		}
 	}
 }

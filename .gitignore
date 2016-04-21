@@ -2,3 +2,8 @@ ssl/
 eclipse-launch-profiles/
 target/
 .gcloud/
+.idea
+.project
+.settings
+.classpath
+pugo-co.iml
