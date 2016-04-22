@@ -74,7 +74,7 @@ public class ConvertServlet extends HttpServlet {
 
 	private static final Logger LOG = Logger.getLogger(ConvertServlet.class.getSimpleName());
 
-	private static final String CONFIG_FILE = "config_html.xml";
+	private static final String DEFAULT_CONFIG = "config.xml";
 	private static final String CONFIG_XSL_TAG = "xsl";
 
 	private static final String CONFIG_OUTPUT_EXT_TAG = "outputExt";
@@ -84,15 +84,18 @@ public class ConvertServlet extends HttpServlet {
 	private static final String PARAM_SOURCE = "source";
 	private static final String PARAM_TOKEN = "token";
 	private static final String PARAM_FNAME = "fname";
+	private static final String PARAM_MODE = "mode";
+
+	private String source;
+	private String token;
+	private String fname;
+	private String mode;
 
 	private static String xsl;
 	private static String outputExt;
 	private static String mimeType;
 	private static boolean zipOutput;
 
-	private String source;
-	private String token;
-	private String fname;
 	private Map<String, String> xslParamMap = new HashMap<>();
 
 	@Override
@@ -101,7 +104,13 @@ public class ConvertServlet extends HttpServlet {
 
 		parseParams(request, response);
 
-		readConfig(CONFIG_FILE);
+		readConfig();
+
+		response.setContentType(mimeType);
+		response.setCharacterEncoding("UTF-8");
+		response.setHeader("Content-Disposition", "attachment; filename='" + fname + "." + outputExt);
+
+
 
 		// download source
 		String sourceUrl = URLDecoder.decode(source, "UTF-8");
@@ -120,9 +129,7 @@ public class ConvertServlet extends HttpServlet {
 			xhtml = replaceImgSrcWithBase64(new ByteArrayInputStream(xhtml.toByteArray()), imageData);
 		}
 
-
-
-		ByteArrayOutputStream baos = new ByteArrayOutputStream();
+		//ByteArrayOutputStream baos = new ByteArrayOutputStream();
 		ZipOutputStream zos = null;
 
 		String xslPath = this.getServletContext().getRealPath(xsl);
@@ -131,29 +138,20 @@ public class ConvertServlet extends HttpServlet {
 		Transformation transformation;
 
 		if (zipOutput) {
-			zos =  new ZipOutputStream(baos);
+			zos =  new ZipOutputStream(response.getOutputStream());
 			transformation = new Transformation(xslPath, inputStream, zos);
 		} else {
-			transformation = new Transformation(xslPath, inputStream, baos);
+			transformation = new Transformation(xslPath, inputStream, response.getOutputStream());
 		}
 
 		setXsltParameters(transformation);
 
 		ThreadManager.createThreadForCurrentRequest(transformation).run();
 
-		baos.flush();
-		baos.close();
-
 		if (zos != null) {
 			zos.finish();
 			zos.close();
 		}
-
-		response.setContentType(mimeType);
-		response.setHeader("Content-Disposition", "attachment; filename='" + fname + "." + outputExt);
-
-		response.getOutputStream().write(baos.toByteArray());
-		response.getOutputStream().flush();
 	}
 
 	private void parseParams(HttpServletRequest request, HttpServletResponse response) throws IOException {
@@ -182,6 +180,8 @@ public class ConvertServlet extends HttpServlet {
 				token = paramValue;
 			else if (paramName.equals(PARAM_FNAME))
 				fname = paramValue;
+			else if (paramName.equals(PARAM_MODE))
+				mode = paramValue;
 			else if (matcher.find())
 				xslParamMap.put(matcher.group(1), paramValue);
 		}
@@ -210,19 +210,25 @@ public class ConvertServlet extends HttpServlet {
 		out.println(str);
 	}
 
-	private void readConfig(String config) {
+	private void readConfig() {
+		String config = (mode != null) ? "config_" + mode + ".xml" : DEFAULT_CONFIG;
 		File configFile = new File(this.getServletContext().getRealPath(config));
-		DocumentBuilderFactory documentBuilderFactory = DocumentBuilderFactory.newInstance();
-		try {
-			DocumentBuilder documentBuilder = documentBuilderFactory.newDocumentBuilder();
-			Document document = documentBuilder.parse(configFile);
-			xsl = getConfigElementTextContent(document, CONFIG_XSL_TAG);
-			outputExt = getConfigElementTextContent(document, CONFIG_OUTPUT_EXT_TAG);
-			mimeType = getConfigElementTextContent(document, CONFIG_MIMETYPE_TAG);
-			zipOutput = getConfigElementTextContent(document, CONFIG_ZIP_OUTPUT_TAG).equals("true");
-		} catch (ParserConfigurationException | SAXException | IOException e) {
-			LOG.severe("Error reading config.xml: " + e.getMessage());
-			e.printStackTrace();
+
+		if (configFile.exists()) {
+			DocumentBuilderFactory documentBuilderFactory = DocumentBuilderFactory.newInstance();
+			try {
+				DocumentBuilder documentBuilder = documentBuilderFactory.newDocumentBuilder();
+				Document document = documentBuilder.parse(configFile);
+				xsl = getConfigElementTextContent(document, CONFIG_XSL_TAG);
+				outputExt = getConfigElementTextContent(document, CONFIG_OUTPUT_EXT_TAG);
+				mimeType = getConfigElementTextContent(document, CONFIG_MIMETYPE_TAG);
+				zipOutput = getConfigElementTextContent(document, CONFIG_ZIP_OUTPUT_TAG).equals("true");
+			} catch (ParserConfigurationException | SAXException | IOException e) {
+				LOG.severe("Error reading config.xml: " + e.getMessage());
+				e.printStackTrace();
+			}
+		} else {
+			System.err.println("Could not find config file: " + config);
 		}
 	}
 
