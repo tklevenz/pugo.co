@@ -4,6 +4,8 @@
     exclude-result-prefixes="xs"
     version="2.0">
     
+    <xsl:output encoding="utf-8" method="xhtml"/>
+    
     <xsl:template match="node() | @*">
         <xsl:copy>
             <xsl:apply-templates select="node() | @*"/>

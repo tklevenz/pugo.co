@@ -62,7 +62,6 @@ import org.apache.commons.io.IOUtils;
 import org.apache.tika.Tika;
 import org.w3c.tidy.Tidy;
 
-import com.google.appengine.api.ThreadManager;
 import org.xml.sax.SAXException;
 
 /**
@@ -106,47 +105,51 @@ public class ConvertServlet extends HttpServlet {
 
 		readConfig();
 
-		response.setContentType(mimeType);
-		response.setCharacterEncoding("UTF-8");
-		response.setHeader("Content-Disposition", "attachment; filename='" + fname + "." + outputExt);
-
-
-
 		// download source
 		String sourceUrl = URLDecoder.decode(source, "UTF-8");
 		URL url = new URL(sourceUrl);
 		URLConnection urlConnection = url.openConnection();
-
 		urlConnection.setRequestProperty("Authorization", "Bearer " + token);
 
 		ByteArrayOutputStream xhtml = tidyHtml(urlConnection.getInputStream());
 
-		Set<String> imageLinks = extractImageLinks(new ByteArrayInputStream(xhtml.toByteArray()));
+		String content = IOUtils.toString(new ByteArrayInputStream(xhtml.toByteArray()));
+
+
+		response.setContentType(mimeType + "; charset=utf-8");
+		//response.setCharacterEncoding("UTF-8");
+		response.setHeader("Content-Disposition", "attachment; filename='" + fname + "." + outputExt);
+
+
+		Set<String> imageLinks = extractImageLinks(content);
 		HashMap<String, String> imageData = new HashMap<>();
 
 		if (imageLinks != null) {
 			downloadImageData(imageLinks, imageData);
-			xhtml = replaceImgSrcWithBase64(new ByteArrayInputStream(xhtml.toByteArray()), imageData);
+			content = replaceImgSrcWithBase64(content, imageData);
 		}
 
 		//ByteArrayOutputStream baos = new ByteArrayOutputStream();
 		ZipOutputStream zos = null;
 
 		String xslPath = this.getServletContext().getRealPath(xsl);
-		InputStream inputStream = new ByteArrayInputStream(xhtml.toByteArray());
+		InputStream inputStream = IOUtils.toInputStream(content, "utf-8");
+
 
 		Transformation transformation;
+		//ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
 		if (zipOutput) {
-			zos =  new ZipOutputStream(response.getOutputStream());
+			zos = new ZipOutputStream(response.getOutputStream());
 			transformation = new Transformation(xslPath, inputStream, zos);
 		} else {
-			transformation = new Transformation(xslPath, inputStream, response.getOutputStream());
+			transformation = new Transformation(xslPath, inputStream, response.getWriter());
 		}
 
 		setXsltParameters(transformation);
 
-		ThreadManager.createThreadForCurrentRequest(transformation).run();
+		transformation.transform();
+
 
 		if (zos != null) {
 			zos.finish();
@@ -264,12 +267,12 @@ public class ConvertServlet extends HttpServlet {
 	/*
 	 * @return a Set containing image data
 	 */
-	private Set<String> extractImageLinks(InputStream inputStream) {
+	private Set<String> extractImageLinks(String content) {
 		System.err.println("Extracting image data...");
 
 		final Set<String> imageLinks = new HashSet<>();
 
-		final Scanner scanner = new Scanner(inputStream);
+		final Scanner scanner = new Scanner(content);
 
 		final Pattern imgPattern = Pattern.compile("<img(.*?)>", Pattern.DOTALL);
 		final Pattern srcPattern = Pattern.compile("src=\"(.*?)\"");
@@ -290,7 +293,7 @@ public class ConvertServlet extends HttpServlet {
 
 	private void downloadImageData(Set<String> imageLinks, HashMap<String, String> imageData) {
 
-		ExecutorService service = Executors.newCachedThreadPool(ThreadManager.currentRequestThreadFactory());
+		ExecutorService service = Executors.newCachedThreadPool();
 
 		for (final String imageLink : imageLinks) {
 			RunnableFuture<byte[]> future = new FutureTask<>(new Callable<byte[]>() {
@@ -325,30 +328,21 @@ public class ConvertServlet extends HttpServlet {
 		}
 	}
 
-	private ByteArrayOutputStream replaceImgSrcWithBase64(InputStream is, Map<String, String> imageData) {
-		try {
-			String content = IOUtils.toString(is);
-			for (Entry<String, String> entry : imageData.entrySet()) {
-				String base64String = entry.getValue();
-				Tika tika = new Tika();
-				String mimeType = tika.detect(Base64.decodeBase64(base64String));
-				content = content.replaceAll(entry.getKey(),
-						Matcher.quoteReplacement("data:" + mimeType + ";base64," + base64String));
-			}
-			is.close();
-			ByteArrayOutputStream os = new ByteArrayOutputStream();
-			IOUtils.write(content, os);
-			return os;
-		} catch (IOException e) {
-			e.printStackTrace();
-			return null;
+	private String replaceImgSrcWithBase64(String content, Map<String, String> imageData) {
+		for (Entry<String, String> entry : imageData.entrySet()) {
+			String base64String = entry.getValue();
+			Tika tika = new Tika();
+			String mimeType = tika.detect(Base64.decodeBase64(base64String));
+			content = content.replaceAll(entry.getKey(),
+					Matcher.quoteReplacement("data:" + mimeType + ";base64," + base64String));
 		}
+		return content;
 	}
 
 	/*
 	 * runs JTidy to convert html to xhtml
 	 */
-	private ByteArrayOutputStream tidyHtml(InputStream in) {
+	static ByteArrayOutputStream tidyHtml(InputStream in) {
 		Tidy tidy = new Tidy();
 		ByteArrayOutputStream baos = new ByteArrayOutputStream();
 		tidy.setXHTML(true);
@@ -356,43 +350,58 @@ public class ConvertServlet extends HttpServlet {
 		return baos;
 	}
 
-	private class Transformation implements Runnable {
+	private class Transformation {
 		private TransformerFactory transformerFactory = new net.sf.saxon.TransformerFactoryImpl();
 		private Transformer transformer;
 		private InputStream inputStream;
 		private OutputStream outputStream;
+		private String xslPath;
+		private Writer writer;
 
 		public Transformation(String xslPath, InputStream inputStream, OutputStream outputStream) {
 			this.inputStream = inputStream;
 			this.outputStream = outputStream;
+			this.xslPath = xslPath;
 
 			if (outputStream instanceof ZipOutputStream)
 				transformerFactory.setAttribute("http://saxon.sf.net/feature/outputURIResolver",
 						new ZipOutputURIResolver((ZipOutputStream) outputStream));
 
+			setupTransformer();
+		}
+
+		public Transformation(String xslPath, InputStream inputStream, Writer writer) {
+			this.inputStream = inputStream;
+			this.writer = writer;
+			this.xslPath = xslPath;
+
+			setupTransformer();
+		}
+
+		private void setupTransformer() {
 			try {
 				transformer = transformerFactory.newTransformer(new StreamSource(xslPath));
 			} catch (TransformerConfigurationException e) {
 				e.printStackTrace();
 			}
-
 		}
 
 		void setParameter(String name, Object parameter) {
 			transformer.setParameter(name, parameter);
 		}
 
-		@Override
-		public void run() {
-			StreamResult result;
+		void transform() {
+			StreamResult result = null;
+			StreamSource source = new StreamSource(inputStream);
 
 			if (outputStream instanceof ZipOutputStream)
 				result = new StreamResult(new ByteArrayOutputStream());
-			else
-				result = new StreamResult(outputStream);
+
+			if (writer != null)
+				result = new StreamResult(writer);
 
 			try {
-				transformer.transform(new StreamSource(inputStream), result);
+				transformer.transform(source, result);
 			} catch (TransformerException e) {
 				e.printStackTrace();
 			}

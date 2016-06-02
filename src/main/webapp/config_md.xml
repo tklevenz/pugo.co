@@ -5,7 +5,7 @@
     <!-- Extension of Output file -->
     <outputExt>md</outputExt>
     <!-- HttpServletResponse.setContentType -->
-    <mimeType>application/force-download</mimeType>
+    <mimeType>text/plain</mimeType>
     <!--
         If true files generated with xsl:result-document
         will be written to a zip file,
