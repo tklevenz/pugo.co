@@ -132,7 +132,7 @@ public class ConvertServlet extends HttpServlet {
 		//ByteArrayOutputStream baos = new ByteArrayOutputStream();
 		ZipOutputStream zos = null;
 
-		String xslPath = this.getServletContext().getRealPath(xsl);
+		InputStream _xsl = getServletContext().getResourceAsStream(xsl);
 		InputStream inputStream = IOUtils.toInputStream(content, "utf-8");
 
 
@@ -141,9 +141,9 @@ public class ConvertServlet extends HttpServlet {
 
 		if (zipOutput) {
 			zos = new ZipOutputStream(response.getOutputStream());
-			transformation = new Transformation(xslPath, inputStream, zos);
+			transformation = new Transformation(_xsl, inputStream, zos);
 		} else {
-			transformation = new Transformation(xslPath, inputStream, response.getWriter());
+			transformation = new Transformation(_xsl, inputStream, response.getWriter());
 		}
 
 		setXsltParameters(transformation);
@@ -215,24 +215,22 @@ public class ConvertServlet extends HttpServlet {
 
 	private void readConfig() {
 		String config = (mode != null) ? "config_" + mode + ".xml" : DEFAULT_CONFIG;
-		File configFile = new File(this.getServletContext().getRealPath(config));
+		InputStream is = getServletContext().getResourceAsStream("/" + config);
+		//File configFile = new File(this.getServletContext().getRealPath("/" + config));
 
-		if (configFile.exists()) {
-			DocumentBuilderFactory documentBuilderFactory = DocumentBuilderFactory.newInstance();
-			try {
-				DocumentBuilder documentBuilder = documentBuilderFactory.newDocumentBuilder();
-				Document document = documentBuilder.parse(configFile);
-				xsl = getConfigElementTextContent(document, CONFIG_XSL_TAG);
-				outputExt = getConfigElementTextContent(document, CONFIG_OUTPUT_EXT_TAG);
-				mimeType = getConfigElementTextContent(document, CONFIG_MIMETYPE_TAG);
-				zipOutput = getConfigElementTextContent(document, CONFIG_ZIP_OUTPUT_TAG).equals("true");
-			} catch (ParserConfigurationException | SAXException | IOException e) {
-				LOG.severe("Error reading config.xml: " + e.getMessage());
-				e.printStackTrace();
-			}
-		} else {
-			System.err.println("Could not find config file: " + config);
+		DocumentBuilderFactory documentBuilderFactory = DocumentBuilderFactory.newInstance();
+		try {
+			DocumentBuilder documentBuilder = documentBuilderFactory.newDocumentBuilder();
+			Document document = documentBuilder.parse(is);
+			xsl = getConfigElementTextContent(document, CONFIG_XSL_TAG);
+			outputExt = getConfigElementTextContent(document, CONFIG_OUTPUT_EXT_TAG);
+			mimeType = getConfigElementTextContent(document, CONFIG_MIMETYPE_TAG);
+			zipOutput = getConfigElementTextContent(document, CONFIG_ZIP_OUTPUT_TAG).equals("true");
+		} catch (ParserConfigurationException | SAXException | IOException e) {
+			LOG.severe("Error reading config.xml: " + e.getMessage());
+			e.printStackTrace();
 		}
+
 	}
 
 	private String getConfigElementTextContent(Document document, String tag) {
@@ -355,13 +353,13 @@ public class ConvertServlet extends HttpServlet {
 		private Transformer transformer;
 		private InputStream inputStream;
 		private OutputStream outputStream;
-		private String xslPath;
+		private InputStream xsl;
 		private Writer writer;
 
-		public Transformation(String xslPath, InputStream inputStream, OutputStream outputStream) {
+		public Transformation(InputStream xsl, InputStream inputStream, OutputStream outputStream) {
 			this.inputStream = inputStream;
 			this.outputStream = outputStream;
-			this.xslPath = xslPath;
+			this.xsl = xsl;
 
 			if (outputStream instanceof ZipOutputStream)
 				transformerFactory.setAttribute("http://saxon.sf.net/feature/outputURIResolver",
@@ -370,17 +368,17 @@ public class ConvertServlet extends HttpServlet {
 			setupTransformer();
 		}
 
-		public Transformation(String xslPath, InputStream inputStream, Writer writer) {
+		public Transformation(InputStream xsl, InputStream inputStream, Writer writer) {
 			this.inputStream = inputStream;
 			this.writer = writer;
-			this.xslPath = xslPath;
+			this.xsl = xsl;
 
 			setupTransformer();
 		}
 
 		private void setupTransformer() {
 			try {
-				transformer = transformerFactory.newTransformer(new StreamSource(xslPath));
+				transformer = transformerFactory.newTransformer(new StreamSource(xsl));
 			} catch (TransformerConfigurationException e) {
 				e.printStackTrace();
 			}

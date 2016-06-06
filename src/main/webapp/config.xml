@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <config>
     <!-- XSLT Stylesheet used for the transformation -->
-    <xsl>epub.xsl</xsl>
+    <xsl>html.xsl</xsl>
     <!-- Extension of Output file -->
-    <outputExt>epub</outputExt>
+    <outputExt>html</outputExt>
     <!-- HttpServletResponse.setContentType -->
-    <mimeType>application/zip</mimeType>
+    <mimeType>text/html</mimeType>
     <!--
         If true files generated with xsl:result-document
         will be written to a zip file,
         standard output will be discarded
     -->
-    <zipOutput>true</zipOutput>
+    <zipOutput>false</zipOutput>
 </config>
