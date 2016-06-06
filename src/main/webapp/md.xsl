@@ -7,7 +7,7 @@
     <xsl:param name="h3">###</xsl:param>
     <xsl:param name="h4">####</xsl:param>
     <xsl:param name="h5">#####</xsl:param>
-    <xsl:param name="localDomain">foodtrucks-deutschland.de</xsl:param>
+    <xsl:param name="localDomain">example.com</xsl:param>
     <xsl:param name="quoteStyle">color:#F0AC57 style:center</xsl:param>
     
 <!-- global vars -->
@@ -74,7 +74,7 @@
         <xsl:apply-templates select="table" mode="meta"/>
         <xsl:if test="hr">
             <xsl:apply-templates
-                select="(h1 | p)[following-sibling::hr][not(preceding-sibling::hr)][span]"
+                select="(h1 | p)[following-sibling::hr][not(preceding-sibling::hr[not(matches(@style,'page-break'))])][span]"
                 mode="meta"/>
         </xsl:if>
         <xsl:value-of select="$textStart"/>
