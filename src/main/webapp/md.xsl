@@ -7,7 +7,7 @@
     <xsl:param name="h3">###</xsl:param>
     <xsl:param name="h4">####</xsl:param>
     <xsl:param name="h5">#####</xsl:param>
-    <xsl:param name="localDomain">example.com</xsl:param>
+    <xsl:param name="localDomain">foodtrucks-deutschland.de</xsl:param>
     <xsl:param name="quoteStyle">color:#F0AC57 style:center</xsl:param>
     
 <!-- global vars -->
