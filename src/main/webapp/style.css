@@ -1,0 +1,104 @@
+/*
+    The MIT License (MIT)
+    
+    Copyright (c) 2016 Tobias Klevenz (tobias.klevenz@gmail.com)
+    
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+    
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+    
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+*/
+
+@import url(http://fonts.googleapis.com/css?family=Source+Code+Pro:400,700|Roboto);
+
+html,
+body {
+    font-family: 'Roboto', sans-serif;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+}
+.main {
+    padding: 20px;
+}
+a {
+    text-decoration: none;
+    color: #38a2d1;
+}
+h1 {
+    font-family: 'Source Code Pro', Monospace;
+    font-size: 64px;
+    font-weight: bold;
+}
+
+p {
+    font-size: 32px;
+}
+
+.flex-container {
+    color: #38a2d1;
+    display: -webkit-flex;
+    display: -ms-flexbox;
+    display: flex;
+    -webkit-align-items: center;
+    -ms-flex-align: center;
+    align-items: center;
+    -webkit-justify-content: center;
+    -ms-flex-pack: center;
+    justify-content: center;
+    height: 100%;
+    font-size: 32px;
+    flex-direction: column;
+}
+
+.flex-item {
+    margin: 0;
+}
+
+.github-fork-ribbon {
+    background-color: #333;
+}
+
+#buttons {
+    margin-top: 16px;
+    display: flex;
+    justify-content: center;
+    align-content: center;
+    align-items: center;
+    height: 100%;
+}
+
+#pick {
+    margin-right: 10px;
+}
+
+#result {
+    font-size: 10px;
+    margin-top: 16px;
+}
+
+#transform_params {
+    width: 300px;
+    display: none;
+    margin-top: 20px;
+    padding: 10px 20px;
+    border: 1px solid;
+}
+
+.mdl-radio {
+    margin: 10px 0px;
+    display: block;
+}
