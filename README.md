@@ -31,7 +31,7 @@ To use send a GET request to http://server/war_name/convert with the following P
 
 Additionally any number of Parameters of the form **xslParam_\<Parameter Name>** can be send and will be passed to the XSLT transformation as \<Parameter Name>
 
-There is a bunch of ways to get an export link of a google doc and an OAauth token, one example using the Google Picker API can be found in [../src/main/webapp/script.js]
+There is a bunch of ways to get an export link of a google doc and an OAauth token, one example using the Google Picker API check out [script.js](../src/main/webapp/script.js) which is used in the ePub Demo
 
 ## Configuration
 In the webapp directory are config files of the follwoing form that can be added or adjusted:
