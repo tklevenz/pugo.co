@@ -49,7 +49,6 @@ public class ZipOutputURIResolver implements OutputURIResolver {
 
 	@Override
 	public OutputURIResolver newInstance() {
-		// TODO Auto-generated method stub
 		return new ZipOutputURIResolver(zos);
 	}
 
