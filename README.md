@@ -29,7 +29,9 @@ To use send a GET request to http://server/war_name/convert with the following P
 
 **mode (optional)** = mode for selecting which transformation to run, by default it does html (when mode parameter is ommitted), **md** for markdown and **epub**
 
-Additionally any number of Parameters of the form **xslParam_\<Parameter Name>** can be send and will be passed to the XSLT transformation as <Parameter Name>
+Additionally any number of Parameters of the form **xslParam_\<Parameter Name>** can be send and will be passed to the XSLT transformation as \<Parameter Name>
+
+There is a bunch of ways to get an export link of a google doc and an OAauth token, one example using the Google Picker API can be found in [../src/main/webapp/script.js]
 
 ## Configuration
 In the webapp directory are config files of the follwoing form that can be added or adjusted:
