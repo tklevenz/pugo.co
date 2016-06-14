@@ -7,7 +7,7 @@
     <xsl:param name="h3">###</xsl:param>
     <xsl:param name="h4">####</xsl:param>
     <xsl:param name="h5">#####</xsl:param>
-    <xsl:param name="localDomain">foodtrucks-deutschland.de</xsl:param>
+    <xsl:param name="localDomain">example.com</xsl:param>
     <xsl:param name="quoteStyle">color:#F0AC57 style:center</xsl:param>
     
 <!-- global vars -->
@@ -30,6 +30,14 @@
     <xsl:function
         name="pfn:processLink" xml:space="default">
         <xsl:param name="link"/>
+        <xsl:variable name="link">
+            <xsl:analyze-string select="$link" regex="https://www.google.com/url\?q=(.*?)(&amp;(sa|ust|usg)=.*?)*?">
+            <xsl:matching-substring>
+                <xsl:value-of select="regex-group(1)"/>
+            </xsl:matching-substring>            
+        </xsl:analyze-string>
+        </xsl:variable>
+        
         <xsl:variable name="link"
             select="
                 if (starts-with($link, 'https://www.google.com/url?q=')) then
