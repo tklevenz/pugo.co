@@ -1,12 +1,30 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
     <modelVersion>4.0.0</modelVersion>
+
     <groupId>co.pugo.convert</groupId>
     <artifactId>pugo-co</artifactId>
     <packaging>war</packaging>
     <version>1.11-SNAPSHOT</version>
-    <name>pugo-co Maven Webapp</name>
-    <url>http://maven.apache.org</url>
+
+    <!-- Project Information -->
+    <name>pugo-co Webapp</name>
+    <url>https://github.com/tklevenz/pugo.co</url>
+    <description>Pugo - Google Docs Export</description>
+    <developers>
+        <developer>
+            <name>Tobias Klevenz</name>
+            <email>tobias.klevenz@gmail.com</email>
+            <url>https://github.com/tklevenz</url>
+        </developer>
+    </developers>
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>http://www.opensource.org/licenses/mit-license.php</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
 
     <prerequisites>
         <maven>3.1.0</maven>
@@ -38,6 +56,7 @@
         </dependency>
 
 
+        <!-- Tika -->
         <dependency>
             <groupId>org.apache.tika</groupId>
             <artifactId>tika-core</artifactId>
@@ -61,6 +80,7 @@
         </dependency>
     </dependencies>
 
+    <!-- Build Settings -->
     <build>
         <plugins>
             <plugin>
