@@ -27,14 +27,14 @@ To use send a GET request to http://server/war_name/convert with the following P
 
 **fname** = filename of the resulting Output
 
-**mode (optional)** = mode for selecting which transformation to run, by default it does html (when mode parameter is ommitted), **md** for markdown and **epub**
+**mode (optional)** = mode for selecting which transformation to run, by default it does html (when mode parameter is omitted), **md** for markdown and **epub**
 
 Additionally any number of Parameters of the form **xslParam_\<Parameter Name>** can be send and will be passed to the XSLT transformation as \<Parameter Name>
 
-There is a bunch of ways to get an export link of a google doc and an OAauth token, one example using the Google Picker API check out [script.js](/src/main/webapp/script.js) which is used in the ePub Demo
+There is a bunch of ways to get an export link of a google doc and an OAauth token, for one example using the Google Picker API check out [script.js](/src/main/webapp/script.js) which is used in the ePub Demo
 
 ## Configuration
-In the webapp directory are config files of the follwoing form that can be added or adjusted:
+In the webapp directory are config files of the following form that can be added or adjusted:
 
 ```xml
 <config>
@@ -53,7 +53,7 @@ In the webapp directory are config files of the follwoing form that can be added
 </config>
 ```
 
-Additional config files should be named ``config_**\<mode>**.xml`` and can be used using the mode parameter.
+Additional config files should be named ``config_\<mode>.xml`` and can be used using the mode parameter.
 
 ## Demo
 http://pugo.co/pugo-co-1.11/
