@@ -6,6 +6,8 @@
     <outputExt>md</outputExt>
     <!-- HttpServletResponse.setContentType -->
     <mimeType>text/plain</mimeType>
+    <!-- process images -->
+    <processImages>false</processImages>
     <!--
         If true files generated with xsl:result-document
         will be written to a zip file,

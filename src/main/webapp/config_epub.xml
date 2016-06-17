@@ -6,6 +6,8 @@
     <outputExt>epub</outputExt>
     <!-- HttpServletResponse.setContentType -->
     <mimeType>application/zip</mimeType>
+    <!-- process images -->
+    <processImages>true</processImages>
     <!--
         If true files generated with xsl:result-document
         will be written to a zip file,
