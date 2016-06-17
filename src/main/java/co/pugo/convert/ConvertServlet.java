@@ -121,7 +121,10 @@ public class ConvertServlet extends HttpServlet {
 		String sourceUrl = URLDecoder.decode(source, "UTF-8");
 		URL url = new URL(sourceUrl);
 		URLConnection urlConnection = url.openConnection();
-		urlConnection.setRequestProperty("Authorization", "Bearer " + token);
+
+		if (token != null) {
+			urlConnection.setRequestProperty("Authorization", "Bearer " + token);
+		}
 
 		// convert html source to xhtml
 		ByteArrayOutputStream xhtml = tidyHtml(urlConnection.getInputStream());
@@ -164,8 +167,13 @@ public class ConvertServlet extends HttpServlet {
 	 */
 	private boolean parseParams(HttpServletRequest request) throws IOException {
 		if (request.getParameterMap().size() == 0) {
-			parseParamsError = "No Parameters specified, minimum required Parameters are: \n"
-					+ "/convert?source=[googleDocs-ExportLink]&token=[OAuthToken]&fname=[OutputFileName]";
+			parseParamsError = "No Parameters specified, available Parameters are: \n" +
+					"source=[Source URL] \n" +
+					"token=[OAuth token] (optional, only if required by Source URL) \n" +
+					"fname=[Output Filename] \n" +
+					"mode=[md, epub, ...] (optional, xhtml mode if mode is not provided) \n" +
+					"xslParam_<XSLT Parameter Name> (optional, any number of parameters can be provided " +
+					"and will be passed to the XSLT transformation";
 			return false;
 		}
 		Map parameterMap = request.getParameterMap();
@@ -189,10 +197,6 @@ public class ConvertServlet extends HttpServlet {
 		}
 		if (source == null) {
 			parseParamsError = "No source provided";
-			return false;
-		}
-		if (token == null) {
-			parseParamsError = "No token provided";
 			return false;
 		}
 		if (fname == null) {
