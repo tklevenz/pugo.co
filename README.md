@@ -21,7 +21,8 @@ The compiled war can be deployed on Tomcat 7 and 8
 ## Usage
 To use send a request to http://server/war_name/convert with the following Parameters:
 
-**source** = ``https://docs.google.com/feeds/download/documents/export/Export?id=<docid>&exportFormat=html`` this does not have to be an URL from docs, the file could come from elsewhere or not even be a docs file at all.
+**source** = ``https://docs.google.com/feeds/download/documents/export/Export?id=<docid>&exportFormat=html``
+this does not have to be an URL from docs, the file could come from elsewhere or not even be a docs file at all.
 
 **token (optional)** = OAuth token for the file if needed for the source URL
 
