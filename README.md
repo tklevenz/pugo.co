@@ -7,7 +7,7 @@ This project is part of a paper for my M.CSc at Trier University of Applied Scie
 A webservice that provides a way of exporting a Google Doc to any XML or Text based format that can be generated with XSLT.
 
 ## How does it work?
-It takes a Google Docs html export and transforms it into wellformed xhtml that can then be transformed into anything that can be generated with XSLT.
+It takes a Google Docs html export file and transforms it into wellformed xhtml that can then be transformed into anything that can be generated with XSLT.
 
 ## Installation
 The project uses maven, so the best way to run and compile it is using maven, however it can also easily be imported into Eclipse or Intellij and run from there.
@@ -19,11 +19,11 @@ To compile a war: `mvn package`
 The compiled war can be deployed on Tomcat 7 and 8
 
 ## Usage
-To use send a GET request to http://server/war_name/convert with the following Parameters:
+To use send a request to http://server/war_name/convert with the following Parameters:
 
-**source** = ``https://docs.google.com/feeds/download/documents/export/Export?id=<docid>&exportFormat=html``
+**source** = ``https://docs.google.com/feeds/download/documents/export/Export?id=<docid>&exportFormat=html`` this does not have to be an URL from docs, the file could come from elsewhere or not even be a docs file at all.
 
-**token** = OAuth token for the file
+**token (optional)** = OAuth token for the file if needed for the source URL
 
 **fname** = filename of the resulting Output
 
