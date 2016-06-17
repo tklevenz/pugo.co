@@ -78,18 +78,20 @@ public class ConvertServlet extends HttpServlet {
 	private static final String CONFIG_OUTPUT_EXT_TAG = "outputExt";
 	private static final String CONFIG_MIMETYPE_TAG = "mimeType";
 	private static final String CONFIG_ZIP_OUTPUT_TAG = "zipOutput";
+	private static final String CONFIG_PROCEESS_IMAGES_TAG = "processImages";
 	// fields to hold values from config file
 	private static String xsl;
 	private static String outputExt;
 	private static String mimeType;
 	private static boolean zipOutput;
+	private static boolean processImages;
 
 	// parameter names
 	private static final String PARAM_SOURCE = "source";
 	private static final String PARAM_TOKEN = "token";
 	private static final String PARAM_FNAME = "fname";
 	private static final String PARAM_MODE = "mode";
-	// fields to holf param values
+	// fields to hold param values
 	private String source;
 	private String token;
 	private String fname;
@@ -114,17 +116,10 @@ public class ConvertServlet extends HttpServlet {
 		readConfig();
 
 		// set response properties
-		response.setContentType(mimeType + "; charset=utf-8");
-		response.setHeader("Content-Disposition", "attachment; filename='" + fname + "." + outputExt);
+		setResponseProperties(response);
 
-		// download source data
-		String sourceUrl = URLDecoder.decode(source, "UTF-8");
-		URL url = new URL(sourceUrl);
-		URLConnection urlConnection = url.openConnection();
-
-		if (token != null) {
-			urlConnection.setRequestProperty("Authorization", "Bearer " + token);
-		}
+		// get URLConnection
+		URLConnection urlConnection = getSourceUrlConnection();
 
 		// convert html source to xhtml
 		ByteArrayOutputStream xhtml = tidyHtml(urlConnection.getInputStream());
@@ -133,30 +128,15 @@ public class ConvertServlet extends HttpServlet {
 		String content = IOUtils.toString(new ByteArrayInputStream(xhtml.toByteArray()));
 
 		// process images
-		Set<String> imageLinks = extractImageLinks(content);
-		if (imageLinks != null) {
-			content = replaceImgSrcWithBase64(content, downloadImageData(imageLinks));
+		if (processImages) {
+			Set<String> imageLinks = extractImageLinks(content);
+			if (imageLinks != null) {
+				content = replaceImgSrcWithBase64(content, downloadImageData(imageLinks));
+			}
 		}
 
 		// xslt transformation
-		ZipOutputStream zos = null;
-		InputStream _xsl = getServletContext().getResourceAsStream(xsl);
-		InputStream inputStream = IOUtils.toInputStream(content, "utf-8");
-		Transformation transformation;
-		if (zipOutput) {
-			zos = new ZipOutputStream(response.getOutputStream());
-			transformation = new Transformation(_xsl, inputStream, zos);
-		} else {
-			transformation = new Transformation(_xsl, inputStream, response.getWriter());
-		}
-		setXsltParameters(transformation);
-		transformation.transform();
-
-		// close ZipOutputStream
-		if (zos != null) {
-			zos.finish();
-			zos.close();
-		}
+		setupAndRunXSLTransformation(response, content);
 	}
 
 	/**
@@ -223,6 +203,7 @@ public class ConvertServlet extends HttpServlet {
 			outputExt = getConfigElementTextContent(document, CONFIG_OUTPUT_EXT_TAG);
 			mimeType = getConfigElementTextContent(document, CONFIG_MIMETYPE_TAG);
 			zipOutput = getConfigElementTextContent(document, CONFIG_ZIP_OUTPUT_TAG).equals("true");
+			processImages = getConfigElementTextContent(document, CONFIG_PROCEESS_IMAGES_TAG).equals("true");
 		} catch (ParserConfigurationException | SAXException | IOException e) {
 			LOG.severe("Error reading config.xml: " + e.getMessage());
 			e.printStackTrace();
@@ -240,6 +221,57 @@ public class ConvertServlet extends HttpServlet {
 		return document.getElementsByTagName(tag).item(0).getTextContent();
 	}
 
+	/**
+	 * set properties of ServletResponse
+	 * @param response HttpServletResponse
+	 */
+	private void setResponseProperties(HttpServletResponse response) {
+		response.setContentType(mimeType + "; charset=utf-8");
+		response.setHeader("Content-Disposition", "attachment; filename='" + fname + "." + outputExt);
+	}
+
+	/**
+	 * retreive URLConnection for source document
+	 * @return URLConnection
+	 * @throws IOException
+	 */
+	private URLConnection getSourceUrlConnection() throws IOException {
+		URLConnection urlConnection;
+		String sourceUrl = URLDecoder.decode(source, "UTF-8");
+		URL url = new URL(sourceUrl);
+		urlConnection = url.openConnection();
+		if (token != null) {
+			urlConnection.setRequestProperty("Authorization", "Bearer " + token);
+		}
+		return urlConnection;
+	}
+
+	/**
+	 * Setup XSL Transformation and execute
+	 * @param response HttpServletResponse
+	 * @param content document content as String
+	 * @throws IOException
+	 */
+	private void setupAndRunXSLTransformation(HttpServletResponse response, String content) throws IOException {
+		ZipOutputStream zos = null;
+		InputStream _xsl = getServletContext().getResourceAsStream(xsl);
+		InputStream inputStream = IOUtils.toInputStream(content, "utf-8");
+		Transformation transformation;
+		if (zipOutput) {
+			zos = new ZipOutputStream(response.getOutputStream());
+			transformation = new Transformation(_xsl, inputStream, zos);
+		} else {
+			transformation = new Transformation(_xsl, inputStream, response.getWriter());
+		}
+		setXsltParameters(transformation);
+		transformation.transform();
+
+		// close ZipOutputStream
+		if (zos != null) {
+			zos.finish();
+			zos.close();
+		}
+	}
 
 	/**
 	 * extract a set of image links
