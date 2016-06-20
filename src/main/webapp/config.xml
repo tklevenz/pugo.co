@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <config>
     <!-- XSLT Stylesheet used for the transformation -->
-    <xsl>html.xsl</xsl>
+    <xsl>xhtml.xsl</xsl>
     <!-- Extension of Output file -->
     <outputExt>html</outputExt>
     <!-- HttpServletResponse.setContentType -->
