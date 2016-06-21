@@ -128,6 +128,8 @@ public class ConvertServlet extends HttpServlet {
 
 		// read xhtml to a String, close streams
 		String content = IOUtils.toString(new ByteArrayInputStream(xhtml.toByteArray()));
+
+		// closing streams
 		IOUtils.closeQuietly(html);
 		IOUtils.closeQuietly(xhtml);
 
