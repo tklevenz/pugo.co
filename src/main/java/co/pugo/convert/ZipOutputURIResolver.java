@@ -35,11 +35,11 @@ import javax.xml.transform.stream.StreamResult;
 
 import net.sf.saxon.lib.OutputURIResolver;
 
-public class ZipOutputURIResolver implements OutputURIResolver {
+class ZipOutputURIResolver implements OutputURIResolver {
 	
 	private ZipOutputStream zos;
 	
-	public ZipOutputURIResolver(ZipOutputStream zos) {
+	ZipOutputURIResolver(ZipOutputStream zos) {
 		super();
 		this.zos = zos;
 	}

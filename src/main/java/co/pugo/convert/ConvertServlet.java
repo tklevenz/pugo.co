@@ -48,12 +48,6 @@ import javax.servlet.http.HttpServletResponse;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
-import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerConfigurationException;
-import javax.xml.transform.TransformerException;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.stream.StreamResult;
-import javax.xml.transform.stream.StreamSource;
 
 import org.w3c.dom.Document;
 import org.apache.commons.codec.binary.Base64;
@@ -71,55 +65,26 @@ import org.xml.sax.SAXException;
 public class ConvertServlet extends HttpServlet {
 
 	private static final Logger LOG = Logger.getLogger(ConvertServlet.class.getSimpleName());
-	// default config file
-	private static final String DEFAULT_CONFIG = "config.xml";
-	// xml tags in config file
-	private static final String CONFIG_XSL_TAG = "xsl";
-	private static final String CONFIG_OUTPUT_EXT_TAG = "outputExt";
-	private static final String CONFIG_MIMETYPE_TAG = "mimeType";
-	private static final String CONFIG_ZIP_OUTPUT_TAG = "zipOutput";
-	private static final String CONFIG_PROCEESS_IMAGES_TAG = "processImages";
-	// fields to hold values from config file
-	private static String xsl;
-	private static String outputExt;
-	private static String mimeType;
-	private static boolean zipOutput;
-	private static boolean processImages;
-
-	// parameter names
-	private static final String PARAM_SOURCE = "source";
-	private static final String PARAM_TOKEN = "token";
-	private static final String PARAM_FNAME = "fname";
-	private static final String PARAM_MODE = "mode";
-	// fields to hold param values
-	private String source;
-	private String token;
-	private String fname;
-	private String mode;
-
-	// map that will hold xslt parameters that are provided as xslParam_<xslt parameter name>
-	private final Map<String, String> xslParamMap = new HashMap<>();
-
-	private String parseParamsError;
 
 	@Override
 	protected void service(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
 
-		// parse parameter and print error message if unsuccessful
-		if (!parseParams(request)) {
-			response.getWriter().println(parseParamsError);
+		Parameters parameters = new Parameters();
+		if (!parseParams(request, response, parameters))
 			return;
-		}
 
 		// read config file
-		readConfig();
+		String configFile = (parameters.getMode() != null) ? "config_" + parameters.getMode() + ".xml" : Configuration.DEFAULT_CONFIG;
+		Configuration configuration = new Configuration();
+		readConfig(configFile, configuration);
 
 		// set response properties
-		setResponseProperties(response);
+		setResponseProperties(response, configuration.getMimeType(),
+				parameters.getFname() + "." + configuration.getOutputExt());
 
 		// get URLConnection
-		URLConnection urlConnection = getSourceUrlConnection();
+		URLConnection urlConnection = getSourceUrlConnection(parameters.getSource(), parameters.getToken());
 
 		// convert html source to xhtml
 		InputStream html = urlConnection.getInputStream();
@@ -134,7 +99,7 @@ public class ConvertServlet extends HttpServlet {
 		IOUtils.closeQuietly(xhtml);
 
 		// process images
-		if (processImages) {
+		if (configuration.isProcessImages()) {
 			Set<String> imageLinks = extractImageLinks(content);
 			if (imageLinks != null) {
 				content = replaceImgSrcWithBase64(content, downloadImageData(imageLinks));
@@ -142,23 +107,26 @@ public class ConvertServlet extends HttpServlet {
 		}
 
 		// xslt transformation
-		setupAndRunXSLTransformation(response, content);
+		setupAndRunXSLTransformation(response, content, parameters, configuration);
 	}
 
 	/**
-	 * parse request parameters print information if insufficient parameters are provided
+	 * parse request parameters print error message if insufficient parameters are provided
 	 * @param request HttpServletRequest
+	 * @param response HttpServletResponse
+	 * @param parameters local Parameters object
 	 * @return success
 	 */
-	private boolean parseParams(HttpServletRequest request) {
+	private boolean parseParams(HttpServletRequest request, HttpServletResponse response, Parameters parameters)
+		throws IOException{
 		if (request.getParameterMap().size() == 0) {
-			parseParamsError = "No Parameters specified, available Parameters are: \n" +
+			response.getWriter().println("No Parameters specified, available Parameters are: \n" +
 					"source=[Source URL] \n" +
 					"token=[OAuth token] (optional, only if required by Source URL) \n" +
 					"fname=[Output Filename] \n" +
 					"mode=[md, epub, ...] (optional, xhtml mode if mode is not provided) \n" +
 					"xslParam_<XSLT Parameter Name> (optional, any number of parameters can be provided " +
-					"and will be passed to the XSLT transformation";
+					"and will be passed to the XSLT transformation");
 			return false;
 		}
 		Map parameterMap = request.getParameterMap();
@@ -169,23 +137,23 @@ public class ConvertServlet extends HttpServlet {
 			String paramName = (String) entry.getKey();
 			String[] paramValue = (String[]) entry.getValue();
 			Matcher matcher = xslParamPattern.matcher(paramName);
-			if (paramName.equals(PARAM_SOURCE))
-				source = paramValue[0];
-			else if (paramName.equals(PARAM_TOKEN))
-				token = paramValue[0];
-			else if (paramName.equals(PARAM_FNAME))
-				fname = paramValue[0];
-			else if (paramName.equals(PARAM_MODE))
-				mode = paramValue[0];
+			if (paramName.equals(Parameters.PARAM_SOURCE))
+				parameters.setSource(paramValue[0]);
+			else if (paramName.equals(Parameters.PARAM_TOKEN))
+				parameters.setToken(paramValue[0]);
+			else if (paramName.equals(Parameters.PARAM_FNAME))
+				parameters.setFname(paramValue[0]);
+			else if (paramName.equals(Parameters.PARAM_MODE))
+				parameters.setMode(paramValue[0]);
 			else if (matcher.find())
-				xslParamMap.put(matcher.group(1), paramValue[0]);
+				parameters.getXslParameters().put(matcher.group(1), paramValue[0]);
 		}
-		if (source == null) {
-			parseParamsError = "No source provided";
+		if (parameters.getSource() == null) {
+			response.getWriter().println("No source provided");
 			return false;
 		}
-		if (fname == null) {
-			parseParamsError = "No fname provided";
+		if (parameters.getFname() == null) {
+			response.getWriter().println("No fname provided");
 			return false;
 		} else {
 			return true;
@@ -193,22 +161,21 @@ public class ConvertServlet extends HttpServlet {
 	}
 
 	/**
-	 * read config file
-	 * if mode parameter is provided config_<mode>.xml is used
-	 * otherwise default config.xml is used
+	 * read config file to configuration object
+	 * @param configFile configuration filename
+	 * @param configuration local Configuration object
 	 */
-	private void readConfig() {
-		String config = (mode != null) ? "config_" + mode + ".xml" : DEFAULT_CONFIG;
-		InputStream is = getServletContext().getResourceAsStream("/" + config);
+	private void readConfig(String configFile, Configuration configuration) {
+		InputStream is = getServletContext().getResourceAsStream("/" + configFile);
 		DocumentBuilderFactory documentBuilderFactory = DocumentBuilderFactory.newInstance();
 		try {
 			DocumentBuilder documentBuilder = documentBuilderFactory.newDocumentBuilder();
 			Document document = documentBuilder.parse(is);
-			xsl = getConfigElementTextContent(document, CONFIG_XSL_TAG);
-			outputExt = getConfigElementTextContent(document, CONFIG_OUTPUT_EXT_TAG);
-			mimeType = getConfigElementTextContent(document, CONFIG_MIMETYPE_TAG);
-			zipOutput = getConfigElementTextContent(document, CONFIG_ZIP_OUTPUT_TAG).equals("true");
-			processImages = getConfigElementTextContent(document, CONFIG_PROCEESS_IMAGES_TAG).equals("true");
+			configuration.setXsl(getConfigElementTextContent(document, Configuration.CONFIG_XSL_TAG));
+			configuration.setOutputExt(getConfigElementTextContent(document, Configuration.CONFIG_OUTPUT_EXT_TAG));
+			configuration.setMimeType(getConfigElementTextContent(document, Configuration.CONFIG_MIMETYPE_TAG));
+			configuration.setZipOutput(getConfigElementTextContent(document, Configuration.CONFIG_ZIP_OUTPUT_TAG).equals("true"));
+			configuration.setProcessImages(getConfigElementTextContent(document, Configuration.CONFIG_PROCEESS_IMAGES_TAG).equals("true"));
 		} catch (ParserConfigurationException | SAXException | IOException e) {
 			LOG.severe("Error reading config.xml: " + e.getMessage());
 			e.printStackTrace();
@@ -231,9 +198,9 @@ public class ConvertServlet extends HttpServlet {
 	 * set properties of ServletResponse
 	 * @param response HttpServletResponse
 	 */
-	private void setResponseProperties(HttpServletResponse response) {
+	private void setResponseProperties(HttpServletResponse response, String mimeType, String fileName) {
 		response.setContentType(mimeType + "; charset=utf-8");
-		response.setHeader("Content-Disposition", "attachment; filename='" + fname + "." + outputExt);
+		response.setHeader("Content-Disposition", "attachment; filename='" + fileName);
 	}
 
 	/**
@@ -241,7 +208,7 @@ public class ConvertServlet extends HttpServlet {
 	 * @return URLConnection
 	 * @throws IOException
 	 */
-	private URLConnection getSourceUrlConnection() throws IOException {
+	private URLConnection getSourceUrlConnection(String source, String token) throws IOException {
 		URLConnection urlConnection;
 		String sourceUrl = URLDecoder.decode(source, "UTF-8");
 		URL url = new URL(sourceUrl);
@@ -258,18 +225,38 @@ public class ConvertServlet extends HttpServlet {
 	 * @param content document content as String
 	 * @throws IOException
 	 */
-	private void setupAndRunXSLTransformation(HttpServletResponse response, String content) throws IOException {
+	private void setupAndRunXSLTransformation(HttpServletResponse response, String content,
+											  Parameters parameters, Configuration configuration) throws IOException {
 		ZipOutputStream zos = null;
-		InputStream _xsl = getServletContext().getResourceAsStream(xsl);
+		InputStream _xsl = getServletContext().getResourceAsStream(configuration.getXsl());
 		InputStream xhtml = IOUtils.toInputStream(content, "utf-8");
 		Transformation transformation;
-		if (zipOutput) {
+		if (configuration.isZipOutput()) {
 			zos = new ZipOutputStream(response.getOutputStream());
 			transformation = new Transformation(_xsl, xhtml, zos);
 		} else {
 			transformation = new Transformation(_xsl, xhtml, response.getWriter());
 		}
-		setXsltParameters(transformation);
+
+		Integer intValue = null;
+		String param, value;
+		for (Map.Entry<String, String> entry : parameters.getXslParameters().entrySet()) {
+			param = entry.getKey();
+			value = entry.getValue();
+			try {
+				intValue = Integer.parseInt(value);
+			} catch (NumberFormatException ignored) { }
+			// pass Integer to transformer
+			if (intValue != null)
+				transformation.setParameter(param, intValue);
+				// pass boolean to transformer
+			else if (value.equals("true") || value.equals("false"))
+				transformation.setParameter(param, value.equals("true"));
+				// pass String to transformer
+			else
+				transformation.setParameter(param, value);
+		}
+
 		transformation.transform();
 
 		// close ZipOutputStream
@@ -363,10 +350,6 @@ public class ConvertServlet extends HttpServlet {
 		return content;
 	}
 
-	/*
-	 *
-	 */
-
 	/**
 	 * run JTidy to convert html to xhtml
 	 * @param html InputStream of html data
@@ -376,118 +359,5 @@ public class ConvertServlet extends HttpServlet {
 		Tidy tidy = new Tidy();
 		tidy.setXHTML(true);
 		tidy.parse(html, xhtml);
-	}
-
-	/**
-	 * set xslt parameters stored in xslParamMap to the transformation
-	 * @param transformation
-	 */
-	private void setXsltParameters(Transformation transformation) {
-		Integer intValue = null;
-		String param, value;
-		for (Map.Entry<String, String> entry : xslParamMap.entrySet()) {
-			param = entry.getKey();
-			value = entry.getValue();
-			try {
-				intValue = Integer.parseInt(value);
-			} catch (NumberFormatException ignored) { }
-			// pass Integer to transformer
-			if (intValue != null)
-				transformation.setParameter(param, intValue);
-				// pass boolean to transformer
-			else if (value.equals("true") || value.equals("false"))
-				transformation.setParameter(param, value.equals("true"));
-				// pass String to transformer
-			else
-				transformation.setParameter(param, value);
-		}
-	}
-
-	/**
-	 * custom Transformation class
-	 */
-	private class Transformation {
-		private TransformerFactory transformerFactory = new net.sf.saxon.TransformerFactoryImpl();
-		private Transformer transformer;
-		private InputStream source;
-		private OutputStream result;
-		private InputStream xsl;
-		private Writer writer;
-
-		/**
-		 * used for transformation when output is zipped
-		 * @param xsl xslt stylesheet as InputStream
-		 * @param source xhtml input
-		 * @param result will be given to ZipOutputURIResolver
-		 */
-		public Transformation(InputStream xsl, InputStream source, OutputStream result) {
-			this.source = source;
-			this.result = result;
-			this.xsl = xsl;
-
-			if (result instanceof ZipOutputStream)
-				transformerFactory.setAttribute("http://saxon.sf.net/feature/outputURIResolver",
-						new ZipOutputURIResolver((ZipOutputStream) result));
-
-			setupTransformer();
-		}
-
-		/**
-		 * used for 'default' transformation
-		 * @param xsl xslt stylesheet as InputStream
-		 * @param source xhtml input
-		 * @param writer output is written to response
-		 */
-		public Transformation(InputStream xsl, InputStream source, Writer writer) {
-			this.source = source;
-			this.writer = writer;
-			this.xsl = xsl;
-
-			setupTransformer();
-		}
-
-		/**
-		 * helper method to setup transformer
-		 */
-		private void setupTransformer() {
-			try {
-				transformer = transformerFactory.newTransformer(new StreamSource(xsl));
-			} catch (TransformerConfigurationException e) {
-				e.printStackTrace();
-			}
-		}
-
-		/**
-		 * pass parameter to transformer
-		 * @param paramName parameter name
-		 * @param paramValue parameter value
-		 */
-		void setParameter(String paramName, Object paramValue) {
-			transformer.setParameter(paramName, paramValue);
-		}
-
-		/**
-		 * run transformation
-		 */
-		void transform() {
-			StreamResult streamResult = null;
-			StreamSource streamSource = new StreamSource(source);
-
-			if (this.result instanceof ZipOutputStream)
-				streamResult = new StreamResult(new ByteArrayOutputStream());
-
-			if (writer != null)
-				streamResult = new StreamResult(writer);
-
-			try {
-				transformer.transform(streamSource, streamResult);
-			} catch (TransformerException e) {
-				e.printStackTrace();
-			} finally {
-				IOUtils.closeQuietly(xsl);
-				IOUtils.closeQuietly(source);
-				IOUtils.closeQuietly(writer);
-			}
-		}
 	}
 }
