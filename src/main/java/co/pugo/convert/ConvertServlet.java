@@ -122,10 +122,14 @@ public class ConvertServlet extends HttpServlet {
 		URLConnection urlConnection = getSourceUrlConnection();
 
 		// convert html source to xhtml
-		ByteArrayOutputStream xhtml = tidyHtml(urlConnection.getInputStream());
+		InputStream html = urlConnection.getInputStream();
+		ByteArrayOutputStream xhtml = new ByteArrayOutputStream();
+		tidyHtml(html, xhtml);
 
-		// read xhtml to a String
+		// read xhtml to a String, close streams
 		String content = IOUtils.toString(new ByteArrayInputStream(xhtml.toByteArray()));
+		IOUtils.closeQuietly(html);
+		IOUtils.closeQuietly(xhtml);
 
 		// process images
 		if (processImages) {
@@ -142,10 +146,9 @@ public class ConvertServlet extends HttpServlet {
 	/**
 	 * parse request parameters print information if insufficient parameters are provided
 	 * @param request HttpServletRequest
-	 * @throws IOException
 	 * @return success
 	 */
-	private boolean parseParams(HttpServletRequest request) throws IOException {
+	private boolean parseParams(HttpServletRequest request) {
 		if (request.getParameterMap().size() == 0) {
 			parseParamsError = "No Parameters specified, available Parameters are: \n" +
 					"source=[Source URL] \n" +
@@ -207,8 +210,9 @@ public class ConvertServlet extends HttpServlet {
 		} catch (ParserConfigurationException | SAXException | IOException e) {
 			LOG.severe("Error reading config.xml: " + e.getMessage());
 			e.printStackTrace();
+		} finally {
+			IOUtils.closeQuietly(is);
 		}
-
 	}
 
 	/**
@@ -231,7 +235,7 @@ public class ConvertServlet extends HttpServlet {
 	}
 
 	/**
-	 * retreive URLConnection for source document
+	 * retrieve URLConnection for source document
 	 * @return URLConnection
 	 * @throws IOException
 	 */
@@ -255,13 +259,13 @@ public class ConvertServlet extends HttpServlet {
 	private void setupAndRunXSLTransformation(HttpServletResponse response, String content) throws IOException {
 		ZipOutputStream zos = null;
 		InputStream _xsl = getServletContext().getResourceAsStream(xsl);
-		InputStream inputStream = IOUtils.toInputStream(content, "utf-8");
+		InputStream xhtml = IOUtils.toInputStream(content, "utf-8");
 		Transformation transformation;
 		if (zipOutput) {
 			zos = new ZipOutputStream(response.getOutputStream());
-			transformation = new Transformation(_xsl, inputStream, zos);
+			transformation = new Transformation(_xsl, xhtml, zos);
 		} else {
-			transformation = new Transformation(_xsl, inputStream, response.getWriter());
+			transformation = new Transformation(_xsl, xhtml, response.getWriter());
 		}
 		setXsltParameters(transformation);
 		transformation.transform();
@@ -341,10 +345,10 @@ public class ConvertServlet extends HttpServlet {
 	}
 
 	/**
-	 * search and replace imagelinks with base64 encoded image
+	 * search and replace image links with base64 encoded image
 	 * @param content document content as String
 	 * @param imageData map of extracted imageData
-	 * @return content after imagelinks have been replaced with base64 code
+	 * @return content after image links have been replaced with base64 code
 	 */
 	private String replaceImgSrcWithBase64(String content, Map<String, String> imageData) {
 		for (Entry<String, String> entry : imageData.entrySet()) {
@@ -364,14 +368,12 @@ public class ConvertServlet extends HttpServlet {
 	/**
 	 * run JTidy to convert html to xhtml
 	 * @param html InputStream of html data
-	 * @return xhtml as OutputStream
+	 * @param xhtml OutputStream for xhtml data
 	 */
-	private static ByteArrayOutputStream tidyHtml(InputStream html) {
+	private void tidyHtml(InputStream html, OutputStream xhtml) {
 		Tidy tidy = new Tidy();
-		ByteArrayOutputStream xhtml = new ByteArrayOutputStream();
 		tidy.setXHTML(true);
 		tidy.parse(html, xhtml);
-		return xhtml;
 	}
 
 	/**
@@ -405,25 +407,25 @@ public class ConvertServlet extends HttpServlet {
 	private class Transformation {
 		private TransformerFactory transformerFactory = new net.sf.saxon.TransformerFactoryImpl();
 		private Transformer transformer;
-		private InputStream inputStream;
-		private OutputStream outputStream;
+		private InputStream source;
+		private OutputStream result;
 		private InputStream xsl;
 		private Writer writer;
 
 		/**
 		 * used for transformation when output is zipped
 		 * @param xsl xslt stylesheet as InputStream
-		 * @param inputStream xhtml input
-		 * @param outputStream will be given to ZipOutputURIResolver
+		 * @param source xhtml input
+		 * @param result will be given to ZipOutputURIResolver
 		 */
-		public Transformation(InputStream xsl, InputStream inputStream, OutputStream outputStream) {
-			this.inputStream = inputStream;
-			this.outputStream = outputStream;
+		public Transformation(InputStream xsl, InputStream source, OutputStream result) {
+			this.source = source;
+			this.result = result;
 			this.xsl = xsl;
 
-			if (outputStream instanceof ZipOutputStream)
+			if (result instanceof ZipOutputStream)
 				transformerFactory.setAttribute("http://saxon.sf.net/feature/outputURIResolver",
-						new ZipOutputURIResolver((ZipOutputStream) outputStream));
+						new ZipOutputURIResolver((ZipOutputStream) result));
 
 			setupTransformer();
 		}
@@ -431,11 +433,11 @@ public class ConvertServlet extends HttpServlet {
 		/**
 		 * used for 'default' transformation
 		 * @param xsl xslt stylesheet as InputStream
-		 * @param inputStream xhtml input
+		 * @param source xhtml input
 		 * @param writer output is written to response
 		 */
-		public Transformation(InputStream xsl, InputStream inputStream, Writer writer) {
-			this.inputStream = inputStream;
+		public Transformation(InputStream xsl, InputStream source, Writer writer) {
+			this.source = source;
 			this.writer = writer;
 			this.xsl = xsl;
 
@@ -466,19 +468,23 @@ public class ConvertServlet extends HttpServlet {
 		 * run transformation
 		 */
 		void transform() {
-			StreamResult result = null;
-			StreamSource source = new StreamSource(inputStream);
+			StreamResult streamResult = null;
+			StreamSource streamSource = new StreamSource(source);
 
-			if (outputStream instanceof ZipOutputStream)
-				result = new StreamResult(new ByteArrayOutputStream());
+			if (this.result instanceof ZipOutputStream)
+				streamResult = new StreamResult(new ByteArrayOutputStream());
 
 			if (writer != null)
-				result = new StreamResult(writer);
+				streamResult = new StreamResult(writer);
 
 			try {
-				transformer.transform(source, result);
+				transformer.transform(streamSource, streamResult);
 			} catch (TransformerException e) {
 				e.printStackTrace();
+			} finally {
+				IOUtils.closeQuietly(xsl);
+				IOUtils.closeQuietly(source);
+				IOUtils.closeQuietly(writer);
 			}
 		}
 	}
