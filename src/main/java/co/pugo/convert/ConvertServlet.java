@@ -45,17 +45,11 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
 
-import org.w3c.dom.Document;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.io.IOUtils;
 import org.apache.tika.Tika;
 import org.w3c.tidy.Tidy;
-
-import org.xml.sax.SAXException;
 
 /**
  * @author Tobias Klevenz (tobias.klevenz@gmail.com)
@@ -64,7 +58,7 @@ import org.xml.sax.SAXException;
 @SuppressWarnings("serial")
 public class ConvertServlet extends HttpServlet {
 
-	private static final Logger LOG = Logger.getLogger(ConvertServlet.class.getSimpleName());
+	static final Logger LOG = Logger.getLogger(ConvertServlet.class.getSimpleName());
 
 	@Override
 	protected void service(HttpServletRequest request, HttpServletResponse response)
@@ -75,9 +69,7 @@ public class ConvertServlet extends HttpServlet {
 			return;
 
 		// read config file
-		String configFile = (parameters.getMode() != null) ? "config_" + parameters.getMode() + ".xml" : Configuration.DEFAULT_CONFIG;
-		Configuration configuration = new Configuration();
-		readConfig(configFile, configuration);
+		Configuration configuration = new Configuration(getConfigFile(parameters.getMode()));
 
 		// set response properties
 		setResponseProperties(response, configuration.getMimeType(),
@@ -99,7 +91,7 @@ public class ConvertServlet extends HttpServlet {
 		IOUtils.closeQuietly(xhtml);
 
 		// process images
-		if (configuration.isProcessImages()) {
+		if (configuration.isProcessImagesSet()) {
 			Set<String> imageLinks = extractImageLinks(content);
 			if (imageLinks != null) {
 				content = replaceImgSrcWithBase64(content, downloadImageData(imageLinks));
@@ -108,6 +100,20 @@ public class ConvertServlet extends HttpServlet {
 
 		// xslt transformation
 		setupAndRunXSLTransformation(response, content, parameters, configuration);
+	}
+
+	/**
+	 * get config file as Stream based on provided mode
+ 	 * @param mode output mode set by parameter
+	 * @return Config File as InputStream
+	 */
+	private InputStream getConfigFile(String mode) {
+		InputStream configFileStream = null;
+		if (mode != null)
+			configFileStream = getServletContext().getResourceAsStream("/config_" + mode + ".xml");
+		if (mode == null || configFileStream == null)
+			configFileStream = getServletContext().getResourceAsStream("/config.xml");
+		return configFileStream;
 	}
 
 	/**
@@ -161,40 +167,6 @@ public class ConvertServlet extends HttpServlet {
 	}
 
 	/**
-	 * read config file to configuration object
-	 * @param configFile configuration filename
-	 * @param configuration local Configuration object
-	 */
-	private void readConfig(String configFile, Configuration configuration) {
-		InputStream is = getServletContext().getResourceAsStream("/" + configFile);
-		DocumentBuilderFactory documentBuilderFactory = DocumentBuilderFactory.newInstance();
-		try {
-			DocumentBuilder documentBuilder = documentBuilderFactory.newDocumentBuilder();
-			Document document = documentBuilder.parse(is);
-			configuration.setXsl(getConfigElementTextContent(document, Configuration.CONFIG_XSL_TAG));
-			configuration.setOutputExt(getConfigElementTextContent(document, Configuration.CONFIG_OUTPUT_EXT_TAG));
-			configuration.setMimeType(getConfigElementTextContent(document, Configuration.CONFIG_MIMETYPE_TAG));
-			configuration.setZipOutput(getConfigElementTextContent(document, Configuration.CONFIG_ZIP_OUTPUT_TAG).equals("true"));
-			configuration.setProcessImages(getConfigElementTextContent(document, Configuration.CONFIG_PROCEESS_IMAGES_TAG).equals("true"));
-		} catch (ParserConfigurationException | SAXException | IOException e) {
-			LOG.severe("Error reading config.xml: " + e.getMessage());
-			e.printStackTrace();
-		} finally {
-			IOUtils.closeQuietly(is);
-		}
-	}
-
-	/**
-	 * helper method to get element content
-	 * @param document xml document
-	 * @param tag xml tag
-	 * @return element content
-	 */
-	private String getConfigElementTextContent(Document document, String tag) {
-		return document.getElementsByTagName(tag).item(0).getTextContent();
-	}
-
-	/**
 	 * set properties of ServletResponse
 	 * @param response HttpServletResponse
 	 */
@@ -231,7 +203,7 @@ public class ConvertServlet extends HttpServlet {
 		InputStream _xsl = getServletContext().getResourceAsStream(configuration.getXsl());
 		InputStream xhtml = IOUtils.toInputStream(content, "utf-8");
 		Transformation transformation;
-		if (configuration.isZipOutput()) {
+		if (configuration.isZipOutputSet()) {
 			zos = new ZipOutputStream(response.getOutputStream());
 			transformation = new Transformation(_xsl, xhtml, zos);
 		} else {

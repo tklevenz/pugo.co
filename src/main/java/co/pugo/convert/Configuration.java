@@ -1,17 +1,25 @@
 package co.pugo.convert;
 
+import org.apache.commons.io.IOUtils;
+import org.w3c.dom.Document;
+import org.xml.sax.SAXException;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import java.io.IOException;
+import java.io.InputStream;
+
 /**
  * class to store output configuration
  */
 class Configuration {
-	// default config file
-	static final String DEFAULT_CONFIG = "config.xml";
 	// xml tags in config file
-	static final String CONFIG_XSL_TAG = "xsl";
-	static final String CONFIG_OUTPUT_EXT_TAG = "outputExt";
-	static final String CONFIG_MIMETYPE_TAG = "mimeType";
-	static final String CONFIG_ZIP_OUTPUT_TAG = "zipOutput";
-	static final String CONFIG_PROCEESS_IMAGES_TAG = "processImages";
+	private static final String CONFIG_XSL_TAG = "xsl";
+	private static final String CONFIG_OUTPUT_EXT_TAG = "outputExt";
+	private static final String CONFIG_MIMETYPE_TAG = "mimeType";
+	private static final String CONFIG_ZIP_OUTPUT_TAG = "zipOutput";
+	private static final String CONFIG_PROCEESS_IMAGES_TAG = "processImages";
 
 	private String xsl;
 	private String outputExt;
@@ -19,43 +27,51 @@ class Configuration {
 	private boolean zipOutput;
 	private boolean processImages;
 
-	String getXsl() {
-		return xsl;
+	Configuration(InputStream configFile) {
+		DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+		try {
+			DocumentBuilder documentBuilder = dbf.newDocumentBuilder();
+			Document document = documentBuilder.parse(configFile);
+			xsl = getConfigElementTextContent(document, CONFIG_XSL_TAG);
+			outputExt = getConfigElementTextContent(document, CONFIG_OUTPUT_EXT_TAG);
+			mimeType = getConfigElementTextContent(document, CONFIG_MIMETYPE_TAG);
+			zipOutput = getConfigElementTextContent(document, CONFIG_ZIP_OUTPUT_TAG).equals("true");
+			processImages = getConfigElementTextContent(document, CONFIG_PROCEESS_IMAGES_TAG).equals("true");
+		} catch (ParserConfigurationException | SAXException | IOException e) {
+			ConvertServlet.LOG.severe("Error reading config.xml: " + e.getMessage());
+			e.printStackTrace();
+		} finally {
+			IOUtils.closeQuietly(configFile);
+		}
 	}
 
-	void setXsl(String xsl) {
-		this.xsl = xsl;
+	/**
+	 * helper method to get element content
+	 * @param document xml document
+	 * @param tag xml tag
+	 * @return element content
+	 */
+	private String getConfigElementTextContent(Document document, String tag) {
+		return document.getElementsByTagName(tag).item(0).getTextContent();
+	}
+
+	String getXsl() {
+		return xsl;
 	}
 
 	String getOutputExt() {
 		return outputExt;
 	}
 
-	void setOutputExt(String outputExt) {
-		this.outputExt = outputExt;
-	}
-
 	String getMimeType() {
 		return mimeType;
 	}
 
-	void setMimeType(String mimeType) {
-		this.mimeType = mimeType;
-	}
-
-	boolean isZipOutput() {
+	boolean isZipOutputSet() {
 		return zipOutput;
 	}
 
-	void setZipOutput(boolean zipOutput) {
-		this.zipOutput = zipOutput;
-	}
-
-	boolean isProcessImages() {
+	boolean isProcessImagesSet() {
 		return processImages;
-	}
-
-	void setProcessImages(boolean processImages) {
-		this.processImages = processImages;
 	}
 }
