@@ -1,7 +1,10 @@
 package co.pugo.convert;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * class to store received http parameters
@@ -19,36 +22,41 @@ class Parameters {
 	private String mode;
 	private Map<String, String> xslParameters = new HashMap<>();
 
-	String getSource() {
-		return source;
+	Parameters(Map parameterMap) {
+		Iterator iterator = parameterMap.entrySet().iterator();
+		Pattern xslParamPattern = Pattern.compile("^xslParam_(.*?)$");
+		while (iterator.hasNext()) {
+			Map.Entry entry = (Map.Entry) iterator.next();
+			String paramName = (String) entry.getKey();
+			String[] paramValue = (String[]) entry.getValue();
+			Matcher matcher = xslParamPattern.matcher(paramName);
+			if (paramName.equals(Parameters.PARAM_SOURCE))
+				source = paramValue[0];
+			else if (paramName.equals(Parameters.PARAM_TOKEN))
+				token = paramValue[0];
+			else if (paramName.equals(Parameters.PARAM_FNAME))
+				fname = paramValue[0];
+			else if (paramName.equals(Parameters.PARAM_MODE))
+				mode = paramValue[0];
+			else if (matcher.find())
+				xslParameters.put(matcher.group(1), paramValue[0]);
+		}
 	}
 
-	void setSource(String source) {
-		this.source = source;
+	String getSource() {
+		return source;
 	}
 
 	String getToken() {
 		return token;
 	}
 
-	void setToken(String token) {
-		this.token = token;
-	}
-
 	String getFname() {
 		return fname;
 	}
 
-	void setFname(String fname) {
-		this.fname = fname;
-	}
-
 	String getMode() {
 		return mode;
-	}
-
-	void setMode(String mode) {
-		this.mode = mode;
 	}
 
 	Map<String, String> getXslParameters() {

@@ -30,7 +30,6 @@ import java.net.URLConnection;
 import java.net.URLDecoder;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Scanner;
@@ -64,9 +63,9 @@ public class ConvertServlet extends HttpServlet {
 	protected void service(HttpServletRequest request, HttpServletResponse response)
 			throws ServletException, IOException {
 
-		Parameters parameters = new Parameters();
-		if (!parseParams(request, response, parameters))
-			return;
+		// parse parameters
+		Parameters parameters = new Parameters(request.getParameterMap());
+		if (!hasRequiredParameters(parameters, response)) return;
 
 		// read config file
 		Configuration configuration = new Configuration(getConfigFile(parameters.getMode()));
@@ -83,19 +82,18 @@ public class ConvertServlet extends HttpServlet {
 		ByteArrayOutputStream xhtml = new ByteArrayOutputStream();
 		tidyHtml(html, xhtml);
 
-		// read xhtml to a String, close streams
+		// read xhtml to a String
 		String content = IOUtils.toString(new ByteArrayInputStream(xhtml.toByteArray()));
 
-		// closing streams
+		// close streams
 		IOUtils.closeQuietly(html);
 		IOUtils.closeQuietly(xhtml);
 
 		// process images
 		if (configuration.isProcessImagesSet()) {
 			Set<String> imageLinks = extractImageLinks(content);
-			if (imageLinks != null) {
+			if (imageLinks != null)
 				content = replaceImgSrcWithBase64(content, downloadImageData(imageLinks));
-			}
 		}
 
 		// xslt transformation
@@ -117,49 +115,22 @@ public class ConvertServlet extends HttpServlet {
 	}
 
 	/**
-	 * parse request parameters print error message if insufficient parameters are provided
-	 * @param request HttpServletRequest
+	 * check if required parameters are set
+	 * print error message if not
 	 * @param response HttpServletResponse
 	 * @param parameters local Parameters object
 	 * @return success
 	 */
-	private boolean parseParams(HttpServletRequest request, HttpServletResponse response, Parameters parameters)
+	private boolean hasRequiredParameters(Parameters parameters, HttpServletResponse response)
 		throws IOException{
-		if (request.getParameterMap().size() == 0) {
-			response.getWriter().println("No Parameters specified, available Parameters are: \n" +
-					"source=[Source URL] \n" +
-					"token=[OAuth token] (optional, only if required by Source URL) \n" +
+		if (parameters.getSource() == null || parameters.getFname() == null) {
+			response.getWriter().println("Required Parameters: " +
+					"source=[Source URL], " +
 					"fname=[Output Filename] \n" +
-					"mode=[md, epub, ...] (optional, xhtml mode if mode is not provided) \n" +
-					"xslParam_<XSLT Parameter Name> (optional, any number of parameters can be provided " +
-					"and will be passed to the XSLT transformation");
-			return false;
-		}
-		Map parameterMap = request.getParameterMap();
-		Iterator iterator = parameterMap.entrySet().iterator();
-		Pattern xslParamPattern = Pattern.compile("^xslParam_(.*?)$");
-		while (iterator.hasNext()) {
-			Map.Entry entry = (Map.Entry) iterator.next();
-			String paramName = (String) entry.getKey();
-			String[] paramValue = (String[]) entry.getValue();
-			Matcher matcher = xslParamPattern.matcher(paramName);
-			if (paramName.equals(Parameters.PARAM_SOURCE))
-				parameters.setSource(paramValue[0]);
-			else if (paramName.equals(Parameters.PARAM_TOKEN))
-				parameters.setToken(paramValue[0]);
-			else if (paramName.equals(Parameters.PARAM_FNAME))
-				parameters.setFname(paramValue[0]);
-			else if (paramName.equals(Parameters.PARAM_MODE))
-				parameters.setMode(paramValue[0]);
-			else if (matcher.find())
-				parameters.getXslParameters().put(matcher.group(1), paramValue[0]);
-		}
-		if (parameters.getSource() == null) {
-			response.getWriter().println("No source provided");
-			return false;
-		}
-		if (parameters.getFname() == null) {
-			response.getWriter().println("No fname provided");
+					"Optional Parameters: " +
+					"token=[OAuth token] (provide if required by Source URL), " +
+					"mode=[md, epub, ...], " +
+					"xslParam_<XSLT Parameter Name>");
 			return false;
 		} else {
 			return true;
