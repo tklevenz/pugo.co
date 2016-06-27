@@ -58,6 +58,7 @@ import org.w3c.tidy.Tidy;
 public class ConvertServlet extends HttpServlet {
 
 	static final Logger LOG = Logger.getLogger(ConvertServlet.class.getSimpleName());
+	static final String CONFIG_DIR = "/WEB-INF/CONFIG/";
 
 	@Override
 	protected void service(HttpServletRequest request, HttpServletResponse response)
@@ -108,9 +109,9 @@ public class ConvertServlet extends HttpServlet {
 	private InputStream getConfigFile(String mode) {
 		InputStream configFileStream = null;
 		if (mode != null)
-			configFileStream = getServletContext().getResourceAsStream("/config_" + mode + ".xml");
+			configFileStream = getServletContext().getResourceAsStream(CONFIG_DIR + "config_" + mode + ".xml");
 		if (mode == null || configFileStream == null)
-			configFileStream = getServletContext().getResourceAsStream("/config.xml");
+			configFileStream = getServletContext().getResourceAsStream(CONFIG_DIR + "config.xml");
 		return configFileStream;
 	}
 
@@ -171,14 +172,14 @@ public class ConvertServlet extends HttpServlet {
 	private void setupAndRunXSLTransformation(HttpServletResponse response, String content,
 											  Parameters parameters, Configuration configuration) throws IOException {
 		ZipOutputStream zos = null;
-		InputStream _xsl = getServletContext().getResourceAsStream(configuration.getXsl());
+		InputStream xsl = getServletContext().getResourceAsStream(CONFIG_DIR + configuration.getXsl());
 		InputStream xhtml = IOUtils.toInputStream(content, "utf-8");
 		Transformation transformation;
 		if (configuration.isZipOutputSet()) {
 			zos = new ZipOutputStream(response.getOutputStream());
-			transformation = new Transformation(_xsl, xhtml, zos);
+			transformation = new Transformation(xsl, xhtml, zos);
 		} else {
-			transformation = new Transformation(_xsl, xhtml, response.getWriter());
+			transformation = new Transformation(xsl, xhtml, response.getWriter());
 		}
 
 		Integer intValue = null;
