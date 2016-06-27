@@ -216,12 +216,8 @@ public class ConvertServlet extends HttpServlet {
 	 * @return Set of http links to images
 	 */
 	private Set<String> extractImageLinks(String content) {
-		System.err.println("Extracting image data...");
-
 		final Set<String> imageLinks = new HashSet<>();
-
 		final Scanner scanner = new Scanner(content);
-
 		final Pattern imgPattern = Pattern.compile("<img(.*?)>", Pattern.DOTALL);
 		final Pattern srcPattern = Pattern.compile("src=\"(.*?)\"");
 
