@@ -117,7 +117,7 @@ function setupTransform(file) {
         // setup form
         document.getElementById('source').value = exportLink;
         document.getElementById('token').value = accessToken;
-        document.getElementById('fname').value = encodeURI(file['title']);
+        document.getElementById('fname').value = encodeURI(file['title']) + ".epub";
         document.getElementById('run_transform').disabled = false;
         document.getElementById('transform_params').style.display = "block";
     } else {

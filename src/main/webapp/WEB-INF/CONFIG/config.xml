@@ -7,7 +7,7 @@
     <!-- HttpServletResponse.setContentType -->
     <mimeType>text/html</mimeType>
     <!-- process images -->
-    <processImages>false</processImages>
+    <processImages>true</processImages>
     <!--
         If true files generated with xsl:result-document
         will be written to a zip file,

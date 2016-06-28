@@ -2,8 +2,6 @@
 <config>
     <!-- XSLT Stylesheet used for the transformation -->
     <xsl>epub.xsl</xsl>
-    <!-- Extension of Output file -->
-    <outputExt>epub</outputExt>
     <!-- HttpServletResponse.setContentType -->
     <mimeType>application/zip</mimeType>
     <!-- process images -->

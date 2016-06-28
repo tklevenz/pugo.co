@@ -2,8 +2,6 @@
 <config>
     <!-- XSLT Stylesheet used for the transformation -->
     <xsl>md.xsl</xsl>
-    <!-- Extension of Output file -->
-    <outputExt>md</outputExt>
     <!-- HttpServletResponse.setContentType -->
     <mimeType>text/plain</mimeType>
     <!-- process images -->

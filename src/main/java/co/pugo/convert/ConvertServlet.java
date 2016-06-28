@@ -72,8 +72,7 @@ public class ConvertServlet extends HttpServlet {
 		Configuration configuration = new Configuration(getConfigFile(parameters.getMode()));
 
 		// set response properties
-		setResponseProperties(response, configuration.getMimeType(),
-				parameters.getFname() + "." + configuration.getOutputExt());
+		setResponseProperties(response, configuration.getMimeType(), parameters.getFname());
 
 		// get URLConnection
 		URLConnection urlConnection = getSourceUrlConnection(parameters.getSource(), parameters.getToken());
@@ -163,52 +162,6 @@ public class ConvertServlet extends HttpServlet {
 		return urlConnection;
 	}
 
-	/**
-	 * Setup XSL Transformation and execute
-	 * @param response HttpServletResponse
-	 * @param content document content as String
-	 * @throws IOException
-	 */
-	private void setupAndRunXSLTransformation(HttpServletResponse response, String content,
-											  Parameters parameters, Configuration configuration) throws IOException {
-		ZipOutputStream zos = null;
-		InputStream xsl = getServletContext().getResourceAsStream(CONFIG_DIR + configuration.getXsl());
-		InputStream xhtml = IOUtils.toInputStream(content, "utf-8");
-		Transformation transformation;
-		if (configuration.isZipOutputSet()) {
-			zos = new ZipOutputStream(response.getOutputStream());
-			transformation = new Transformation(xsl, xhtml, zos);
-		} else {
-			transformation = new Transformation(xsl, xhtml, response.getWriter());
-		}
-
-		Integer intValue = null;
-		String param, value;
-		for (Map.Entry<String, String> entry : parameters.getXslParameters().entrySet()) {
-			param = entry.getKey();
-			value = entry.getValue();
-			try {
-				intValue = Integer.parseInt(value);
-			} catch (NumberFormatException ignored) { }
-			// pass Integer to transformer
-			if (intValue != null)
-				transformation.setParameter(param, intValue);
-				// pass boolean to transformer
-			else if (value.equals("true") || value.equals("false"))
-				transformation.setParameter(param, value.equals("true"));
-				// pass String to transformer
-			else
-				transformation.setParameter(param, value);
-		}
-
-		transformation.transform();
-
-		// close ZipOutputStream
-		if (zos != null) {
-			zos.finish();
-			zos.close();
-		}
-	}
 
 	/**
 	 * extract a set of image links
@@ -300,4 +253,49 @@ public class ConvertServlet extends HttpServlet {
 		tidy.setXHTML(true);
 		tidy.parse(html, xhtml);
 	}
+
+	/**
+	 * Setup XSL Transformation and execute
+	 * @param response HttpServletResponse
+	 * @param content document content as String
+	 * @throws IOException
+	 */
+	private void setupAndRunXSLTransformation(HttpServletResponse response, String content,
+											  Parameters parameters, Configuration configuration) throws IOException {
+		ZipOutputStream zos = null;
+		InputStream xsl = getServletContext().getResourceAsStream(CONFIG_DIR + configuration.getXsl());
+		InputStream xhtml = IOUtils.toInputStream(content, "utf-8");
+		Transformation transformation;
+		if (configuration.isZipOutputSet()) {
+			zos = new ZipOutputStream(response.getOutputStream());
+			transformation = new Transformation(xsl, xhtml, zos);
+		} else {
+			transformation = new Transformation(xsl, xhtml, response.getWriter());
+		}
+
+		Integer intValue = null;
+		String param, value;
+		for (Map.Entry<String, String> entry : parameters.getXslParameters().entrySet()) {
+			param = entry.getKey();
+			value = entry.getValue();
+			try {
+				intValue = Integer.parseInt(value);
+			} catch (NumberFormatException ignored) { }
+			// pass Integer to transformer
+			if (intValue != null)
+				transformation.setParameter(param, intValue);
+				// pass boolean to transformer
+			else if (value.equals("true") || value.equals("false"))
+				transformation.setParameter(param, value.equals("true"));
+				// pass String to transformer
+			else
+				transformation.setParameter(param, value);
+		}
+
+		transformation.transform();
+
+		// close ZipOutputStream
+		IOUtils.closeQuietly(zos);
+	}
+
 }

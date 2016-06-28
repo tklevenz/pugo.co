@@ -40,13 +40,11 @@ import java.io.InputStream;
 class Configuration {
 	// xml tags in config file
 	private static final String CONFIG_XSL_TAG = "xsl";
-	private static final String CONFIG_OUTPUT_EXT_TAG = "outputExt";
 	private static final String CONFIG_MIMETYPE_TAG = "mimeType";
 	private static final String CONFIG_ZIP_OUTPUT_TAG = "zipOutput";
 	private static final String CONFIG_PROCEESS_IMAGES_TAG = "processImages";
 
 	private String xsl;
-	private String outputExt;
 	private String mimeType;
 	private boolean zipOutput;
 	private boolean processImages;
@@ -57,7 +55,6 @@ class Configuration {
 			DocumentBuilder documentBuilder = dbf.newDocumentBuilder();
 			Document document = documentBuilder.parse(configFile);
 			xsl = getConfigElementTextContent(document, CONFIG_XSL_TAG);
-			outputExt = getConfigElementTextContent(document, CONFIG_OUTPUT_EXT_TAG);
 			mimeType = getConfigElementTextContent(document, CONFIG_MIMETYPE_TAG);
 			zipOutput = getConfigElementTextContent(document, CONFIG_ZIP_OUTPUT_TAG).equals("true");
 			processImages = getConfigElementTextContent(document, CONFIG_PROCEESS_IMAGES_TAG).equals("true");
@@ -81,10 +78,6 @@ class Configuration {
 
 	String getXsl() {
 		return xsl;
-	}
-
-	String getOutputExt() {
-		return outputExt;
 	}
 
 	String getMimeType() {
