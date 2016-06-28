@@ -25,6 +25,7 @@
 package co.pugo.convert;
 
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.io.output.NullOutputStream;
 
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerConfigurationException;
@@ -36,33 +37,33 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.Writer;
+import java.util.Map;
 import java.util.zip.ZipOutputStream;
 
 /**
  * custom Transformation class
  */
 class Transformation {
+	private static final String OUTPUT_URIRESOLVER = "http://saxon.sf.net/feature/outputURIResolver";
 	private TransformerFactory transformerFactory = new net.sf.saxon.TransformerFactoryImpl();
 	private Transformer transformer;
 	private InputStream source;
-	private OutputStream result;
 	private InputStream xsl;
+	private ZipOutputStream zipOutputStream;
 	private Writer writer;
 
 	/**
 	 * used for transformation when output is zipped
 	 * @param xsl xslt stylesheet as InputStream
 	 * @param source xhtml input
-	 * @param result will be given to ZipOutputURIResolver
+	 * @param zipOutputStream used to create ZipOutputURIResolver
 	 */
-	Transformation(InputStream xsl, InputStream source, OutputStream result) {
+	Transformation(InputStream xsl, InputStream source, ZipOutputStream zipOutputStream) {
 		this.source = source;
-		this.result = result;
+		this.zipOutputStream = zipOutputStream;
 		this.xsl = xsl;
 
-		if (result instanceof ZipOutputStream)
-			transformerFactory.setAttribute("http://saxon.sf.net/feature/outputURIResolver",
-					new ZipOutputURIResolver((ZipOutputStream) result));
+		transformerFactory.setAttribute(OUTPUT_URIRESOLVER, new ZipOutputURIResolver(zipOutputStream));
 
 		setupTransformer();
 	}
@@ -94,34 +95,45 @@ class Transformation {
 
 	/**
 	 * pass parameter to transformer
-	 * @param paramName parameter name
-	 * @param paramValue parameter value
+	 * @param parameters map of xsl parameters passed to the transformer
 	 */
-	void setParameter(String paramName, Object paramValue) {
-		transformer.setParameter(paramName, paramValue);
+	void setParameters(Map<String, String> parameters) {
+		String parameterName, parameterValue;
+		Integer intValue = null;
+		for (Map.Entry<String, String> entry : parameters.entrySet()) {
+			parameterName = entry.getKey();
+			parameterValue = entry.getValue();
+			try {
+				intValue = Integer.parseInt(parameterValue);
+			} catch (NumberFormatException ignored) { }
+			// pass Integer to transformer
+			if (intValue != null)
+				transformer.setParameter(parameterName, intValue);
+				// pass boolean to transformer
+			else if (parameterValue.equals("true") || parameterValue.equals("false"))
+				transformer.setParameter(parameterName, parameterValue.equals("true"));
+				// pass String to transformer
+			else
+				transformer.setParameter(parameterName, parameterValue);
+		}
 	}
 
 	/**
 	 * run transformation
 	 */
 	void transform() {
-		StreamResult streamResult = null;
-		StreamSource streamSource = new StreamSource(source);
-
-		if (this.result instanceof ZipOutputStream)
-			streamResult = new StreamResult(new ByteArrayOutputStream());
-
-		if (writer != null)
-			streamResult = new StreamResult(writer);
-
 		try {
-			transformer.transform(streamSource, streamResult);
+			if (writer != null)
+				transformer.transform(new StreamSource(source), new StreamResult(writer));
+			else
+				transformer.transform(new StreamSource(source), new StreamResult(new NullOutputStream()));
 		} catch (TransformerException e) {
 			e.printStackTrace();
 		} finally {
 			IOUtils.closeQuietly(xsl);
 			IOUtils.closeQuietly(source);
 			IOUtils.closeQuietly(writer);
+			IOUtils.closeQuietly(zipOutputStream);
 		}
 	}
 }

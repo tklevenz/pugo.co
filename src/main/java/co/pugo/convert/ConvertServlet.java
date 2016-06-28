@@ -58,7 +58,7 @@ import org.w3c.tidy.Tidy;
 public class ConvertServlet extends HttpServlet {
 
 	static final Logger LOG = Logger.getLogger(ConvertServlet.class.getSimpleName());
-	static final String CONFIG_DIR = "/WEB-INF/CONFIG/";
+	private static final String CONFIG_DIR = "/WEB-INF/CONFIG/";
 
 	@Override
 	protected void service(HttpServletRequest request, HttpServletResponse response)
@@ -97,7 +97,7 @@ public class ConvertServlet extends HttpServlet {
 		}
 
 		// xslt transformation
-		setupAndRunXSLTransformation(response, content, parameters, configuration);
+		setupAndRunXSLTransformation(response, content, parameters.getXslParameters(), configuration);
 	}
 
 	/**
@@ -258,44 +258,24 @@ public class ConvertServlet extends HttpServlet {
 	 * Setup XSL Transformation and execute
 	 * @param response HttpServletResponse
 	 * @param content document content as String
+	 * @param parameters map of parameters passed to the transformer
+	 * @param configuration object
 	 * @throws IOException
 	 */
 	private void setupAndRunXSLTransformation(HttpServletResponse response, String content,
-											  Parameters parameters, Configuration configuration) throws IOException {
-		ZipOutputStream zos = null;
+											  Map<String, String> parameters, Configuration configuration)
+			throws IOException {
+		InputStream source = IOUtils.toInputStream(content, "utf-8");
 		InputStream xsl = getServletContext().getResourceAsStream(CONFIG_DIR + configuration.getXsl());
-		InputStream xhtml = IOUtils.toInputStream(content, "utf-8");
 		Transformation transformation;
-		if (configuration.isZipOutputSet()) {
-			zos = new ZipOutputStream(response.getOutputStream());
-			transformation = new Transformation(xsl, xhtml, zos);
-		} else {
-			transformation = new Transformation(xsl, xhtml, response.getWriter());
-		}
 
-		Integer intValue = null;
-		String param, value;
-		for (Map.Entry<String, String> entry : parameters.getXslParameters().entrySet()) {
-			param = entry.getKey();
-			value = entry.getValue();
-			try {
-				intValue = Integer.parseInt(value);
-			} catch (NumberFormatException ignored) { }
-			// pass Integer to transformer
-			if (intValue != null)
-				transformation.setParameter(param, intValue);
-				// pass boolean to transformer
-			else if (value.equals("true") || value.equals("false"))
-				transformation.setParameter(param, value.equals("true"));
-				// pass String to transformer
-			else
-				transformation.setParameter(param, value);
-		}
+		if (configuration.isZipOutputSet())
+			transformation = new Transformation(xsl, source, new ZipOutputStream(response.getOutputStream()));
+		else
+			transformation = new Transformation(xsl, source, response.getWriter());
 
+		transformation.setParameters(parameters);
 		transformation.transform();
-
-		// close ZipOutputStream
-		IOUtils.closeQuietly(zos);
 	}
 
 }

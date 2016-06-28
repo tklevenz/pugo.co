@@ -35,10 +35,10 @@ import java.util.regex.Pattern;
  */
 class Parameters {
 	// parameter names
-	static final String PARAM_SOURCE = "source";
-	static final String PARAM_TOKEN = "token";
-	static final String PARAM_FNAME = "fname";
-	static final String PARAM_MODE = "mode";
+	private static final String PARAM_SOURCE = "source";
+	private static final String PARAM_TOKEN = "token";
+	private static final String PARAM_FNAME = "fname";
+	private static final String PARAM_MODE = "mode";
 	// parameters
 	private String source;
 	private String token;
