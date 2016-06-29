@@ -33,9 +33,7 @@ import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.stream.StreamSource;
-import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.io.Writer;
 import java.util.Map;
 import java.util.zip.ZipOutputStream;
@@ -46,27 +44,12 @@ import java.util.zip.ZipOutputStream;
 class Transformation {
 	private static final String OUTPUT_URIRESOLVER = "http://saxon.sf.net/feature/outputURIResolver";
 	private TransformerFactory transformerFactory = new net.sf.saxon.TransformerFactoryImpl();
-	private Transformer transformer;
-	private InputStream source;
+
 	private InputStream xsl;
-	private ZipOutputStream zipOutputStream;
+	private InputStream source;
 	private Writer writer;
-
-	/**
-	 * used for transformation when output is zipped
-	 * @param xsl xslt stylesheet as InputStream
-	 * @param source xhtml input
-	 * @param zipOutputStream used to create ZipOutputURIResolver
-	 */
-	Transformation(InputStream xsl, InputStream source, ZipOutputStream zipOutputStream) {
-		this.source = source;
-		this.zipOutputStream = zipOutputStream;
-		this.xsl = xsl;
-
-		transformerFactory.setAttribute(OUTPUT_URIRESOLVER, new ZipOutputURIResolver(zipOutputStream));
-
-		setupTransformer();
-	}
+	private ZipOutputStream zipOutputStream;
+	private Transformer transformer;
 
 	/**
 	 * used for 'default' transformation
@@ -75,9 +58,25 @@ class Transformation {
 	 * @param writer output is written to response
 	 */
 	Transformation(InputStream xsl, InputStream source, Writer writer) {
+		this.xsl = xsl;
 		this.source = source;
 		this.writer = writer;
+
+		setupTransformer();
+	}
+
+	/**
+	 * used for transformation when output is zipped
+	 * @param xsl xslt stylesheet as InputStream
+	 * @param source xhtml input
+	 * @param zipOutputStream used to create ZipOutputURIResolver
+	 */
+	Transformation(InputStream xsl, InputStream source, ZipOutputStream zipOutputStream) {
 		this.xsl = xsl;
+		this.source = source;
+		this.zipOutputStream = zipOutputStream;
+
+		transformerFactory.setAttribute(OUTPUT_URIRESOLVER, new ZipOutputURIResolver(zipOutputStream));
 
 		setupTransformer();
 	}
@@ -88,13 +87,11 @@ class Transformation {
 	private void setupTransformer() {
 		try {
 			transformer = transformerFactory.newTransformer(new StreamSource(xsl));
-		} catch (TransformerConfigurationException e) {
-			e.printStackTrace();
-		}
+		} catch (TransformerConfigurationException e) { e.printStackTrace(); }
 	}
 
 	/**
-	 * pass parameter to transformer
+	 * pass parameter to transformer based on their data type
 	 * @param parameters map of xsl parameters passed to the transformer
 	 */
 	void setParameters(Map<String, String> parameters) {
@@ -106,13 +103,10 @@ class Transformation {
 			try {
 				intValue = Integer.parseInt(parameterValue);
 			} catch (NumberFormatException ignored) { }
-			// pass Integer to transformer
 			if (intValue != null)
 				transformer.setParameter(parameterName, intValue);
-				// pass boolean to transformer
 			else if (parameterValue.equals("true") || parameterValue.equals("false"))
 				transformer.setParameter(parameterName, parameterValue.equals("true"));
-				// pass String to transformer
 			else
 				transformer.setParameter(parameterName, parameterValue);
 		}

@@ -96,8 +96,8 @@ public class ConvertServlet extends HttpServlet {
 				content = replaceImgSrcWithBase64(content, downloadImageData(imageLinks));
 		}
 
-		// xslt transformation
-		setupAndRunXSLTransformation(response, content, parameters.getXslParameters(), configuration);
+		// xsl transformation
+		setupAndRunXSLTransformation(response, configuration, content, parameters.getXslParameters());
 	}
 
 	/**
@@ -257,14 +257,13 @@ public class ConvertServlet extends HttpServlet {
 	/**
 	 * Setup XSL Transformation and execute
 	 * @param response HttpServletResponse
-	 * @param content document content as String
-	 * @param parameters map of parameters passed to the transformer
 	 * @param configuration object
+	 * @param content document content as String
+	 * @param xslParameters map of parameters passed to the transformer
 	 * @throws IOException
 	 */
-	private void setupAndRunXSLTransformation(HttpServletResponse response, String content,
-											  Map<String, String> parameters, Configuration configuration)
-			throws IOException {
+	private void setupAndRunXSLTransformation(HttpServletResponse response, Configuration configuration,
+											  String content, Map<String, String> xslParameters) throws IOException {
 		InputStream source = IOUtils.toInputStream(content, "utf-8");
 		InputStream xsl = getServletContext().getResourceAsStream(CONFIG_DIR + configuration.getXsl());
 		Transformation transformation;
@@ -274,8 +273,7 @@ public class ConvertServlet extends HttpServlet {
 		else
 			transformation = new Transformation(xsl, source, response.getWriter());
 
-		transformation.setParameters(parameters);
+		transformation.setParameters(xslParameters);
 		transformation.transform();
 	}
-
 }

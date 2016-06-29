@@ -25,7 +25,6 @@
 package co.pugo.convert;
 
 import java.io.IOException;
-import java.util.UUID;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -36,32 +35,37 @@ import javax.xml.transform.stream.StreamResult;
 import net.sf.saxon.lib.OutputURIResolver;
 
 class ZipOutputURIResolver implements OutputURIResolver {
-	
-	private ZipOutputStream zos;
-	
-	ZipOutputURIResolver(ZipOutputStream zos) {
+
+	private ZipOutputStream zipOutputStream;
+
+	ZipOutputURIResolver(ZipOutputStream zipOutputStream) {
 		super();
-		this.zos = zos;
+		this.zipOutputStream = zipOutputStream;
 	}
 
 	@Override
-	public void close(Result arg0) throws TransformerException {}
+	public void close(Result result) throws TransformerException {
+		try {
+			zipOutputStream.closeEntry();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
 
 	@Override
 	public OutputURIResolver newInstance() {
-		return new ZipOutputURIResolver(zos);
+		return new ZipOutputURIResolver(zipOutputStream);
 	}
 
 	@Override
 	public Result resolve(String href, String base) throws TransformerException {
 		try {
-			zos.putNextEntry(new ZipEntry(href));
+			zipOutputStream.putNextEntry(new ZipEntry(href));
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-		Result result = new StreamResult(zos);
-		result.setSystemId(UUID.randomUUID().toString());
+		Result result = new StreamResult(zipOutputStream);
+		result.setSystemId(href);
 		return result;
 	}
-
 }
