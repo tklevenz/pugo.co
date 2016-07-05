@@ -31,13 +31,14 @@
         name="pfn:processLink" xml:space="default">
         <xsl:param name="link"/>
         <xsl:variable name="link">
-            <xsl:analyze-string select="$link" regex="https://www.google.com/url\?q=(.*?)(&amp;(sa|ust|usg)=.*?)*?">
-            <xsl:matching-substring>
-                <xsl:value-of select="regex-group(1)"/>
-            </xsl:matching-substring>            
-        </xsl:analyze-string>
+            <xsl:analyze-string select="$link"
+                regex="https://www.google.com/url\?q=(.*?)(&amp;(sa|ust|usg)=.*?)*?">
+                <xsl:matching-substring>
+                    <xsl:value-of select="regex-group(1)"/>
+                </xsl:matching-substring>
+            </xsl:analyze-string>
         </xsl:variable>
-        
+
         <xsl:variable name="link"
             select="
                 if (starts-with($link, 'https://www.google.com/url?q=')) then
@@ -61,17 +62,37 @@
             select="substring-before(substring-after($css, concat('.', $class, '{')), '}')"/>
     </xsl:function>
 
-    <xsl:function name="pfn:checkFontStyle" xml:space="default" as="xs:boolean">
+    <xsl:function name="pfn:isBold" xml:space="default" as="xs:boolean">
         <xsl:param name="class"/>
-        <xsl:param name="style"/>
+        <xsl:value-of select="pfn:checkCSS($class, 'font-weight:bold')"/>
+    </xsl:function>
+    
+    <xsl:function name="pfn:isItalic" xml:space="default" as="xs:boolean">
+        <xsl:param name="class"/>
+        <xsl:value-of select="pfn:checkCSS($class, 'font-style:italic')"/>
+    </xsl:function>
+    
+    <xsl:function name="pfn:checkCSS" xml:space="default" as="xs:boolean">
+        <xsl:param name="class"/>
+        <xsl:param name="value"/>
         <xsl:value-of
             select="
                 some $i in tokenize($class, ' ')
                     satisfies
-                    matches(pfn:getCSSClass($css, $class), concat('font-weight:', $style))"
+                    matches(pfn:getCSSClass($css, $i), $value)"
         />
     </xsl:function>
     
+    <xsl:function name="pfn:normalize-space" xml:space="default">
+        <xsl:param name="text"/>
+        <xsl:value-of
+            select="
+                if (matches($text, '\s+')) then
+                    ' '
+                else
+                    normalize-space($text)"
+        />
+    </xsl:function>
     
     
     <!-- main -->
@@ -82,14 +103,14 @@
         <xsl:apply-templates select="table" mode="meta"/>
         <xsl:if test="hr">
             <xsl:apply-templates
-                select="(h1 | p)[following-sibling::hr][not(preceding-sibling::hr[not(matches(@style,'page-break'))])][span]"
+                select="(h1 | p)[following-sibling::hr][not(preceding-sibling::hr[not(matches(@style, 'page-break'))])][span]"
                 mode="meta"/>
         </xsl:if>
         <xsl:value-of select="$textStart"/>
         <xsl:apply-templates
             select="
                 if (hr) then
-                    *[preceding-sibling::hr]
+                    *[preceding-sibling::hr[not(matches(@style, 'page-break'))]]
                 else
                     *[preceding-sibling::table]"
         />
@@ -116,15 +137,15 @@
     <xsl:template match="*[not(node())][not(self::br)]"/>
     
     <!-- paras/text -->
-    <xsl:template match="p"><xsl:apply-templates select="span"/><xsl:value-of select="$break, $break"/></xsl:template>
+    <xsl:template match="p"><xsl:apply-templates select="node()"/><xsl:value-of select="$break, $break"/></xsl:template>
+    
+    <xsl:template match="p/text()"><xsl:value-of select="pfn:normalize-space(.)"/></xsl:template>
     
     <xsl:template match="span"><xsl:apply-templates select="node()"/></xsl:template>
+    
+    <xsl:template match="span[pfn:isBold(@class)]">**<xsl:apply-templates select="node()"/>**</xsl:template>
         
-    <xsl:template match="
-            span[pfn:checkFontStyle(@class, 'bold')]">**<xsl:apply-templates select="node()"/>**</xsl:template>
-        
-    <xsl:template match="
-            span[pfn:checkFontStyle(@class, 'italic')]">_<xsl:apply-templates select="node()"/>_</xsl:template>
+    <xsl:template match="span[pfn:isItalic(@class)]">_<xsl:apply-templates select="node()"/>_</xsl:template>
         
     <xsl:template match="span/text()"><xsl:value-of select="normalize-space(.)"/></xsl:template>
         
@@ -132,6 +153,20 @@
     
     <xsl:template match="a">(link:<xsl:value-of select="pfn:processLink(@href)"/> text:<xsl:value-of select="normalize-space(.)"/>)</xsl:template>
     
+    <!-- whole para emphasized -->
+    <xsl:template match="
+            p[every $i in span
+                satisfies $i/pfn:isBold(@class)]">**<xsl:apply-templates select="node()" mode="ignore_em"/>**</xsl:template>
+    <xsl:template match="
+            p[every $i in span
+                satisfies $i/pfn:isItalic(@class)]">_<xsl:apply-templates select="node()" mode="ignore_em"/>_</xsl:template>
+    <xsl:template match="
+            p[every $i in span
+                satisfies $i/pfn:isBold(@class)][every $i in span
+                satisfies $i/pfn:isItalic(@class)]" priority="1">**_<xsl:apply-templates select="node()" mode="ignore_em"/>_**</xsl:template>
+    <xsl:template match="p/text()" mode="ignore_em"><xsl:value-of select="pfn:normalize-space(.)"/></xsl:template>    
+    <xsl:template match="span" mode="ignore_em"><xsl:apply-templates select="node()"/></xsl:template>
+        
     <!-- headings -->
     <xsl:template match="h1"><xsl:value-of select="$h1"/> <xsl:apply-templates select="node()"/><xsl:value-of select="$break, $break"/></xsl:template>
     
@@ -151,7 +186,7 @@
     <xsl:template match="ol/li"><xsl:value-of select="position()"/>. <xsl:apply-templates select="node()"/><xsl:value-of select="$break"/></xsl:template>
     
     <!-- quote -->
-    <xsl:template match="p[@class = 'subtitle'] | p[preceding-sibling::*[1][self::hr]][following-sibling::*[1][self::hr]]">(quote:<xsl:apply-templates select="span"/> <xsl:value-of select="$quoteStyle"/>)<xsl:value-of select="$break, $break"/></xsl:template>    
+    <xsl:template match="p[tokenize(@class, ' ') = 'subtitle']">(quote:<xsl:apply-templates select="span"/> <xsl:value-of select="$quoteStyle"/>)<xsl:value-of select="$break, $break"/></xsl:template>    
 
 
 </xsl:stylesheet>
