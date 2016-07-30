@@ -103,43 +103,17 @@ function createPicker() {
     }
 }
 
-/**
- * Setup hidden form param fields
- * Enable transform button and transformation params dialog
- *
- * @param {File} file Drive File instance.
- */
-function setupTransform(file) {
-    if (file['exportLinks']['text/html']) {
-        var accessToken = gapi.auth.getToken().access_token;
-        var exportLink = encodeURI(file['exportLinks']['text/html']);
-
-        // setup form
-        document.getElementById('source').value = exportLink;
-        document.getElementById('token').value = accessToken;
-        document.getElementById('fname').value = encodeURI(file['title']) + ".epub";
-        document.getElementById('run_transform').disabled = false;
-        document.getElementById('transform_params').style.display = "block";
-    } else {
-        console.log(file);
-    }
-}
-
 // get file Drive instance from picker
 function pickerCallback(data) {
     if (data.action === google.picker.Action.PICKED) {
         var id = data.docs[0].id;
-        var request = new XMLHttpRequest();
-        request.open('GET', 'https://www.googleapis.com/drive/v2/files/' + id);
-        request.setRequestHeader('Authorization', 'Bearer ' + oauthToken);
+        var exportLink = "https://docs.google.com/feeds/download/documents/export/Export?id=" + id + "&exportFormat=html";
 
-        request.addEventListener('load', function() {
-            var file = JSON.parse(request.responseText);
-            console.log(file);
-
-            setupTransform(file);
-        });
-
-        request.send();
+        // setup form
+        document.getElementById('source').value = encodeURI(exportLink);
+        document.getElementById('token').value = gapi.auth.getToken().access_token;
+        document.getElementById('fname').value = encodeURI(data.docs[0].name) + ".epub";
+        document.getElementById('run_transform').disabled = false;
+        document.getElementById('transform_params').style.display = "block";
     }
 }
