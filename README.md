@@ -32,7 +32,7 @@ this does not have to be an URL from docs, the file could come from elsewhere or
 
 Additionally any number of Parameters of the form **xslParam_\<Parameter Name>** can be send and will be passed to the XSLT transformation as \<Parameter Name>
 
-There is a bunch of ways to get an export link of a google doc and an OAauth token, for one example using the Google Picker API check out [script.js](/src/main/webapp/script.js) which is used in the ePub Demo
+There is a bunch of ways to get an export link of a google doc and an OAauth token, for one example using the Google Picker API check out [script.js](/src/main/webapp/script.js) which is used in the [ePub Demo](https://pugo.co/pugo/epub.html)
 
 ## Configuration
 In the webapp directory are config files of the following form that can be added or adjusted:
