@@ -57,6 +57,6 @@ In the webapp directory are config files of the following form that can be added
 Additional config files should be named ``config_<mode>.xml`` and can be used using the mode parameter.
 
 ## Demo
-http://pugo.co/pugo-co-1.11/
+https://pugo.co/pugo/
 
 
